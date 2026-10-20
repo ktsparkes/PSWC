@@ -51,7 +51,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <button id="fab" class="btn pri fab" onclick="tab=='quotes'?editQ():edit()">+ Customer</button>
 <div id="undo"><span id="umsg"></span><button onclick="undo()">Undo</button></div>
 <div id="selbar"></div>
-<div id="lock" style="position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center"><h1>My Round</h1><div class="sub">Enter your PIN</div><input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" style="max-width:220px;text-align:center;font-size:28px;letter-spacing:8px" oninput="chkPin()"><div id="pinerr" class="over" style="min-height:22px"></div><button class="btn pri" onclick="chkPin(true)">Unlock</button></div>
+<div id="lock" style="position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center"><h1>My Round</h1><div class="sub">Sign in to see your round</div><form onsubmit="lockIn();return false" style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px"><input id="li_e" type="email" placeholder="Email" autocomplete="username"><input id="li_p" type="password" placeholder="Password" autocomplete="current-password"><button class="btn pri" type="submit">Sign in</button></form><div id="li_err" class="over" style="min-height:22px"></div><button class="btn" style="border:none;background:none;color:var(--blue)" onclick="lockReset()">Forgot password?</button><button id="li_off" class="btn" style="display:none" onclick="$('lock').style.display='none'">No signal? Open the copy on this device</button></div>
 <dialog id="dlg"><div id="dform"></div></dialog>
 
 <script>
@@ -179,9 +179,8 @@ function settings(){const t=sets();
   <label>Payment details shown on invoices (bank name, sort code, account number)</label><textarea id="s_bank" rows="3">${esc(t.bank)}</textarea>
   <label>Text message. {name} and {day} fill in automatically</label><textarea id="s_msg" rows="4">${esc(t.msg)}</textarea>
   ${cloudHtml()}
-  <label>Change PIN (4 to 8 digits, leave blank to keep the current one)</label><input id="s_pin" inputmode="numeric" maxlength="8" autocomplete="off">
-  <div class="acts"><button class="btn pri" onclick="saveSet()">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button><button class="btn" style="margin-left:auto" onclick="lockNow()">Lock now</button></div>`;$('dlg').showModal()}
-function saveSet(){const t=sets();['biz','email','phone','bank','msg'].forEach(k=>t[k]=$('s_'+k).value.trim());const np=$('s_pin').value.trim();if(np){if(!/^\d{4,8}$/.test(np)){alert('The PIN must be 4 to 8 digits');return}t.pin=np}save();$('dlg').close()}
+  <div class="acts"><button class="btn pri" onclick="saveSet()">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button><button class="btn" style="margin-left:auto" onclick="lockNow()">Sign out</button></div>`;$('dlg').showModal()}
+function saveSet(){const t=sets();['biz','email','phone','bank','msg'].forEach(k=>t[k]=$('s_'+k).value.trim());save();$('dlg').close()}
 function invoice(id){const c=S.customers.find(x=>x.id===id),t=sets(),u=c.visits.filter(v=>vOwed(v)>0).sort((a,b)=>a.date.localeCompare(b.date));
   const txt=`Hi ${c.name},\n\nInvoice from ${t.biz}\nDate: ${fmt(today())}\n\n${u.map(v=>fmt(v.date)+' - '+(c.services||'Window cleaning')+(v.note?' + '+v.note:'')+': '+gbp(vOwed(v))).join('\n')}\n\nTotal due: ${gbp(cOwed(c))}\n\n${t.bank?'Payment details:\n'+t.bank+'\n\n':''}Thank you,\n${t.biz}\n${t.phone} | ${t.email}`;
   $('dform').innerHTML=`<h3 style="margin:0">Invoice for ${esc(c.name)}</h3>
@@ -312,15 +311,13 @@ function exportTy(){
   L.push('','Work done\t'+D.done.toFixed(2),'Money received\t'+D.inc.toFixed(2),'Outgoings\t'+D.out.toFixed(2),'Profit\t'+(D.inc-D.out).toFixed(2),'Still unpaid\t'+D.owed.toFixed(2));
   $('dform').innerHTML=`<h3 style="margin:0">Records ${tyLab(TY)}</h3><p class="sub">Tap Copy, then paste into Excel, Google Sheets, or an email to your accountant.</p><textarea id="bk" rows="12" readonly>${esc(L.join('\n'))}</textarea><div class="acts"><button class="btn pri" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`;$('dlg').showModal()}
 function gk(c,p){return p[c.id]!=null?p[c.id]:(dueWk(c)<W?'o':'u')}
-function pinVal(){return (S.set&&S.set.pin)||'5431'}
-function chkPin(force){const v=$('pin').value,pv=pinVal();
-  if(v===pv){try{sessionStorage.setItem('psw-ok','1')}catch(e){}$('lock').style.display='none';$('pin').value='';$('pinerr').textContent=''}
-  else if(force||v.length>=pv.length){$('pinerr').textContent='Wrong PIN';$('pin').value=''}}
-function lockNow(){try{sessionStorage.removeItem('psw-ok')}catch(e){}$('dlg').close();$('pin').value='';$('pinerr').textContent='';$('lock').style.display='flex'}
-try{if(sessionStorage.getItem('psw-ok')==='1')$('lock').style.display='none'}catch(e){}
+function lockIn(){const e=$('li_e').value.trim(),p=$('li_p').value;if(!FB){$('li_err').textContent='Still connecting. Check your signal and try again.';return}if(!e||!p){$('li_err').textContent='Enter your email and password';return}
+  $('li_err').textContent='Signing in...';FB.Au.signInWithEmailAndPassword(FB.auth,e,p).then(()=>{$('li_p').value='';$('li_err').textContent=''}).catch(x=>{$('li_err').textContent=/invalid|wrong|not-found/.test(x.code||'')?'Wrong email or password':'Could not sign in ('+String(x.code||'no signal').replace('auth/','')+')'})}
+function lockReset(){const e=$('li_e').value.trim();if(!e){$('li_err').textContent='Type your email first, then tap Forgot password';return}if(!FB)return;FB.Au.sendPasswordResetEmail(FB.auth,e).then(()=>$('li_err').textContent='Check your email for a reset link').catch(()=>$('li_err').textContent='Could not send the reset email')}
+function lockNow(){$('dlg').close();signOutCloud();$('lock').style.display='flex'}
 function exportDlg(mode){
   const c=x=>String(x==null?'':x).replace(/[\t\r\n]+/g,' '),L=[];let note;
-  if(mode==='full'){L.push(JSON.stringify(S));note='Everything in the app, including your PIN. Keep it private. Use Restore backup on the Money tab to load it somewhere else.'}
+  if(mode==='full'){L.push(JSON.stringify(S));note='Everything in the app, so keep it private. Use Restore backup on the Money tab to load it somewhere else.'}
   else if(mode==='hist'){L.push('Date\tCustomer\tAddress\tArea\tWork\tAmount\tPaid\tNote');
     S.customers.flatMap(x=>(x.visits||[]).map(v=>({x,v}))).sort((a,b)=>a.v.date.localeCompare(b.v.date)).forEach(({x,v})=>L.push([v.date,c(x.name),c(x.address),c(x.area),c(x.services),v.amount.toFixed(2),v.paid?'Yes':vOwed(v)<v.amount?'Part':'No',c(v.note)].join('\t')));note='Every clean you have logged. Paste into Excel or Google Sheets.'}
   else{L.push('Name\tAddress\tArea\tPhone\tEmail\tBest contact\tServices\tAccess\tOther prices\tPrice\tRepeat (weeks)\tPays by\tBank name\tLast cleaned\tNext due (week of)\tOwes\tNotes');
@@ -342,9 +339,9 @@ async function cloudInit(){
     const u=m=>`https://www.gstatic.com/firebasejs/10.14.1/firebase-${m}.js`;
     const [A,Au,F]=await Promise.all([import(u('app')),import(u('auth')),import(u('firestore'))]);
     const app=A.initializeApp(cfg);FB={Au,F,auth:Au.getAuth(app),db:F.getFirestore(app)};
-    Au.onAuthStateChanged(FB.auth,user=>{CUID=user?user.uid:null;if(unsub){unsub();unsub=null}
+    Au.onAuthStateChanged(FB.auth,user=>{CUID=user?user.uid:null;$('lock').style.display=user?'none':'flex';if(user)try{localStorage.setItem('psw-in','1')}catch(e){}if(unsub){unsub();unsub=null}
       if(user){stat('Cloud: connecting');listen()}else stat('Cloud: signed out. Tap here to sign in')});
-  }catch(e){stat('Cloud unavailable here')}
+  }catch(e){stat('Cloud unavailable here');let w=null;try{w=localStorage.getItem('psw-in')}catch(x){}$('li_err').textContent='Could not connect. Check your signal.';if(w)$('li_off').style.display=''}
 }
 function listen(){const col=FB.F.collection(FB.db,'users',CUID,'store');
   unsub=FB.F.onSnapshot(col,snap=>{if(pushing||pushT)return;
