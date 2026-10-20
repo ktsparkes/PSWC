@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Round</title>
+<style>
+:root{--bg:#f2f6f7;--card:#fff;--ink:#10262f;--mute:#5d737c;--line:#d5e0e4;--blue:#1f6f8b;--yel:#f2c230;--yelink:#3a2c00;--red:#b8351f;--grn:#1d7a4a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1b21;--card:#16282f;--ink:#e6f0f3;--mute:#92a9b1;--line:#27404a;--blue:#5db6d6;--red:#ff8a73;--grn:#59d08f}}
+:root[data-theme="dark"]{--bg:#0e1b21;--card:#16282f;--ink:#e6f0f3;--mute:#92a9b1;--line:#27404a;--blue:#5db6d6;--red:#ff8a73;--grn:#59d08f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Avenir Next","Segoe UI",system-ui,sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px 12px 100px}
+h1{font-size:22px;margin:6px 0 10px}h3{margin:14px 0 4px;font-size:17px}
+nav{display:flex;gap:6px;margin-bottom:10px}
+nav button{flex:1;padding:10px 4px;font-size:15px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font:inherit;font-weight:600}
+nav button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 3px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}
+.card h4{margin:0;font-size:17px}
+.sub{color:var(--mute);font-size:14px}
+.over{color:var(--red);font-weight:700}.ok{color:var(--grn);font-weight:700}
+.btn{padding:10px 14px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600}
+.pri{background:var(--yel);border-color:var(--yel);color:var(--yelink)}
+.acts{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.days{display:flex;gap:4px;margin-top:8px}
+.days button{flex:1;padding:8px 0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700}
+.days button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:14px 18px;border-radius:30px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.big{font-size:30px;font-weight:800}
+.gh{display:flex;justify-content:space-between;margin:16px 2px 0;font-weight:700}
+#selbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));display:none;z-index:5;box-shadow:0 -2px 10px rgba(0,0,0,.2)}
+#undo{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 14px;border-radius:30px;display:none;font-weight:600}
+#undo button{background:none;border:0;color:var(--yel);font:inherit;font-weight:800;margin-left:10px}
+dialog{width:min(560px,94vw);max-height:92vh;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);padding:14px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.empty{text-align:center;color:var(--mute);padding:30px 10px}
+</style>
+</head>
+<body>
+<main>
+<h1>My Round</h1>
+<div id="cs" class="sub" onclick="cloudTap()" style="margin:-6px 0 8px;cursor:pointer"></div>
+<nav id="nav"></nav>
+<div id="filters" style="margin-bottom:6px"></div>
+<div id="view"></div>
+</main>
+<button id="fab" class="btn pri fab" onclick="tab=='quotes'?editQ():edit()">+ Customer</button>
+<div id="undo"><span id="umsg"></span><button onclick="undo()">Undo</button></div>
+<div id="selbar"></div>
+<div id="lock" style="position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center"><h1>My Round</h1><div class="sub">Enter your PIN</div><input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" style="max-width:220px;text-align:center;font-size:28px;letter-spacing:8px" oninput="chkPin()"><div id="pinerr" class="over" style="min-height:22px"></div><button class="btn pri" onclick="chkPin(true)">Unlock</button></div>
+<dialog id="dlg"><div id="dform"></div></dialog>
+
+<script>
+const KEY='psw-round-v1',DN=['Mon','Tue','Wed','Thu','Fri','Sat'];
+let S={customers:[],plan:{}},tab='week',q='',snap=null,ut;
+try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
+S.plan=S.plan||{};
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}cloudPush()}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso=d=>{const z=new Date(d);return z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0')};
+const today=()=>iso(new Date());
+const addDays=(s,n)=>{const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return iso(d)};
+const wk=s=>{const d=new Date(s+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);return iso(d)};
+const fmt=s=>new Date(s+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+const gbp=n=>'£'+(Number(n)||0).toFixed(2).replace(/\.00$/,'');
+const wdiff=(a,b)=>Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/6048e5);
+const CUR=()=>wk(today());let W=CUR();
+const dueWk=c=>c.nextWk?c.nextWk:c.last?(c.freq?addDays(wk(c.last),c.freq*7):null):CUR();
+const vOwed=v=>v.paid?0:Math.max(0,v.amount-(v.part||0));
+const cOwed=c=>(c.visits||[]).reduce((s,v)=>s+vOwed(v),0);
+function act(msg,fn){snap=JSON.stringify(S);fn();save();render();$('umsg').textContent=msg;$('undo').style.display='block';clearTimeout(ut);ut=setTimeout(()=>$('undo').style.display='none',8000)}
+function undo(){if(snap){S=JSON.parse(snap);snap=null;save();render()}$('undo').style.display='none'}
+
+function render(){
+  $('fab').textContent=tab==='quotes'?'+ Quote':'+ Customer';
+  $('nav').innerHTML=[['week','This week'],['all','Customers'],['quotes','Quotes'],['money','Money']].map(([k,l])=>`<button class="${tab==k?'on':''}" onclick="tab='${k}';q='';SEL.clear();render()">${l}</button>`).join('');
+  $('filters').innerHTML=tab==='week'||(tab==='money'&&mtab!=='pay')?'':`<input placeholder="${tab=='money'?'Search name or bank reference':'Search name, street, notes'}" value="${esc(q)}" oninput="q=this.value;paint()">`;
+  paint();
+}
+function paint(){tab==='week'?weekView():tab==='all'?allView():tab==='quotes'?quotesView():moneyView();selBar()}
+const match=c=>{const t=q.toLowerCase();return !t||[c.name,c.address,c.notes,c.services,c.area,c.ref].join(' ').toLowerCase().includes(t)};
+
+function jobCard(c,plan){
+  const d=dueWk(c),late=d?wdiff(CUR(),d):0,o=cOwed(c),pd=plan[c.id];
+  return `<div class="card"><div class="row" style="align-items:start"><input type="checkbox" style="flex:none;width:24px;height:24px;margin-top:2px" ${SEL.has(c.id)?'checked':''} onchange="tog('${c.id}')"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.area?' · '+esc(c.area):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${c.freq?'every '+c.freq+'wk':'one-off'}</div></div></div>
+  <div style="margin-top:4px">${!c.last&&!c.nextWk?'<span class="sub">First clean</span>':late>0?`<span class="over">${late} wk overdue</span>`:'<span class="sub">Due this week</span>'}${o?` <span class="over">· owes ${gbp(o)}</span>`:''}</div>
+  ${c.contact||c.access?`<div class="sub" style="margin-top:4px">${c.contact?'Prefers '+esc(c.contact):''}${c.contact&&c.access?' · ':''}${c.access?'Access: '+esc(c.access):''}</div>`:''}${c.extraNote||c.extraPrice?`<div style="margin-top:4px"><b>Extra:</b> ${esc(c.extraNote)}${c.extraPrice?' '+gbp(c.extraPrice):''}</div>`:''}${c.notes?`<div class="sub" style="margin-top:4px">${esc(c.notes)}</div>`:''}
+  <div class="days">${DN.map((n,i)=>`<button class="${pd===i?'on':''}" onclick="assign('${c.id}',${i})">${n[0]}</button>`).join('')}</div>
+  <div class="acts"><button class="btn pri" onclick="done('${c.id}')">Done ✓</button><button class="btn" onclick="moveDlg('${c.id}')">Move</button><button class="btn" onclick="extraDlg('${c.id}')">Extras</button><button class="btn" onclick="edit('${c.id}')">Edit</button>${c.phone?`<a class="btn" href="tel:${esc(c.phone)}" style="text-decoration:none;color:inherit">Call</a>`:''}</div></div>`;
+}
+function weekView(){
+  const jobs=S.customers.filter(c=>{const d=dueWk(c);return d&&(W==CUR()?d<=W:d===W)});
+  const plan=S.plan[W]||{},g={o:[],u:[],0:[],1:[],2:[],3:[],4:[],5:[]};
+  jobs.sort((a,b)=>(a.area||'').localeCompare(b.area||'')||a.name.localeCompare(b.name)).forEach(c=>g[gk(c,plan)].push(c));g.o.sort((a,b)=>dueWk(a).localeCompare(dueWk(b)));
+  const tot=l=>l.reduce((s,c)=>s+(+c.price||0),0),late=jobs.filter(c=>dueWk(c)<CUR()).length;
+  const wkEnd=addDays(W,6),dn=S.customers.flatMap(c=>(c.visits||[]).map((v,i)=>({c,v,i}))).filter(x=>x.v.date>=W&&x.v.date<=wkEnd);
+  let h=`<div class="row" style="align-items:center"><button class="btn" style="flex:none" onclick="SEL.clear();W=addDays(W,-7);paint()">‹</button><div style="text-align:center"><b>Week of ${fmt(W)}</b>${W==CUR()?'<div class="sub">This week</div>':''}</div><button class="btn" style="flex:none" onclick="SEL.clear();W=addDays(W,7);paint()">›</button></div>
+  <div class="card"><b>${jobs.length} job${jobs.length==1?'':'s'}</b> · ${gbp(tot(jobs))}${late?` · <span class="over">${late} overdue</span>`:''}${jobs.length?`<div class="acts">${g.u.length||g.o.length?`<button class="btn" onclick="suggest()">Suggest days by area</button>`:''}${Object.keys(plan).length?`<button class="btn" onclick="clearDays()">Clear all days</button>`:''}<button class="btn" onclick="textDlg()">Text customers</button></div>`:''}</div>`;
+  [['o','Overdue'],['u',W==CUR()?'Due this week':'Due in this week'],...DN.map((n,i)=>[i,n])].forEach(([k,l])=>{if(g[k].length||(typeof k==='number'&&jobs.length))h+=`<div class="gh"><span class="${k==='o'?'over':''}">${l}</span><span class="sub">${g[k].length} · ${gbp(tot(g[k]))} <button class="btn" style="padding:4px 10px;margin-left:6px" onclick="selGroup('${k}')">Select all</button></span></div>`+(g[k].map(c=>jobCard(c,plan)).join('')||'<div class="sub" style="padding:4px 2px">Nothing planned</div>')});
+  if(!jobs.length)h+=`<div class="empty">${S.customers.length?'Nothing due this week.':'No customers yet. Tap + Customer to add your first.'}</div>`;
+  if(dn.length)h+=`<h3>Done this week</h3>`+dn.map(x=>`<div class="card row" style="align-items:center"><div style="flex:3"><b>${esc(x.c.name)}</b><div class="sub">${fmt(x.v.date)} · ${x.v.paid?'<span class="ok">paid</span>':'<span class="over">unpaid</span>'}${x.c.freq?' · next wk of '+fmt(dueWk(x.c)):''}</div></div><b style="flex:none">${gbp(x.v.amount)}</b><button class="btn" style="flex:none" onclick="unDone('${x.c.id}',${x.i})">Undo</button></div>`).join('');
+  $('view').innerHTML=h;
+}
+function clearDays(){if(confirm('Take every job off its day for this week?'))act('Days cleared',()=>{delete S.plan[W]})}
+function assign(id,d){act('Day set',()=>{const p=S.plan[W]=S.plan[W]||{};p[id]===d?delete p[id]:p[id]=d})}
+function suggest(){act('Days suggested',()=>{
+  const p=S.plan[W]=S.plan[W]||{},jobs=S.customers.filter(c=>{const d=dueWk(c);return d&&(W==CUR()?d<=W:d===W)&&p[c.id]==null});
+  const grp={};jobs.forEach((c,i)=>(grp[c.area||'_'+i]=grp[c.area||'_'+i]||[]).push(c));
+  const load=[0,0,0,0,0];
+  Object.values(grp).sort((a,b)=>b.length-a.length).forEach(l=>{const d=load.indexOf(Math.min(...load));l.forEach(c=>p[c.id]=d);load[d]+=l.length});
+})}
+function done(id){const c0=S.customers.find(x=>x.id===id);act(c0.freq?'Done. Rebooked for week of '+fmt(addDays(CUR(),c0.freq*7)):'Done (one-off, not rebooked)',()=>{const c=S.customers.find(x=>x.id===id);(c.visits=c.visits||[]).push({date:today(),amount:(+c.price||0)+(+c.extraPrice||0),paid:c.pay==='cash',note:c.extraNote||'',pl:c.last||null,pn:c.nextWk||null});c.last=today();c.nextWk=null;c.extraNote='';c.extraPrice=0})}
+function unDone(id,i){act('Undone',()=>{const c=S.customers.find(x=>x.id===id);const v=c.visits.splice(i,1)[0];if('pl' in v&&!c.visits.some(x=>x.date>v.date)){c.last=v.pl;c.nextWk=v.pn}else c.last=c.visits.length?c.visits.map(v=>v.date).sort().pop():null})}
+
+let gb='area';
+function custCard(c){const d=dueWk(c),o=cOwed(c);return `<div class="card" onclick="edit('${c.id}')"><div class="row"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.phone?' · '+esc(c.phone):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${c.freq?'every '+c.freq+'wk':'one-off'}</div></div></div><div class="sub" style="margin-top:4px">${d?'Next: week of '+fmt(d):'No repeat'}${o?` · <span class="over">owes ${gbp(o)}</span>`:''}</div>${gb==='gaps'?`<div class="over" style="margin-top:4px">Missing: ${miss(c).join(', ')}</div>`:''}</div>`}
+function allView(){
+  const l=S.customers.filter(match).sort((a,b)=>a.name.localeCompare(b.name));
+  const top=`<div class="row" style="align-items:center;margin-bottom:6px"><select onchange="gb=this.value;allView()"><option value="area" ${gb=='area'?'selected':''}>Group by area</option><option value="az" ${gb=='az'?'selected':''}>A to Z</option><option value="gaps" ${gb=='gaps'?'selected':''}>Needs details (${S.customers.filter(c=>miss(c).length).length})</option></select><button class="btn" style="flex:none" onclick="impDlg()">Import</button><button class="btn" style="flex:none" onclick="exportDlg('list')">Export</button></div><div class="sub">${l.length} customer${l.length==1?'':'s'}</div>`;
+  let h;
+  if(gb==='area'){const g={};l.forEach(c=>{const k=c.area||'No area';(g[k]=g[k]||[]).push(c)});
+    h=Object.keys(g).sort((a,b)=>a==='No area'?1:b==='No area'?-1:a.localeCompare(b)).map(k=>`<div class="gh"><span>${esc(k)}</span><span class="sub">${g[k].length} · ${gbp(g[k].reduce((s,c)=>s+(+c.price||0),0))}</span></div>`+g[k].map(custCard).join('')).join('')}
+  else if(gb==='gaps')h=l.filter(c=>miss(c).length).map(c=>custCard(c)).join('');
+  else h=l.map(custCard).join('');
+  $('view').innerHTML=top+(h||'<div class="empty">No customers found.</div>');
+}
+function payView(){
+  const m=today().slice(0,7),vs=S.customers.flatMap(c=>(c.visits||[]));
+  const earned=vs.filter(v=>v.date.startsWith(m)).reduce((s,v)=>s+v.amount,0),owed=S.customers.reduce((s,c)=>s+cOwed(c),0);
+  const l=S.customers.filter(c=>cOwed(c)>0&&match(c)).sort((a,b)=>oldest(a).localeCompare(oldest(b)));
+  function oldest(c){return c.visits.filter(v=>vOwed(v)>0).map(v=>v.date).sort()[0]}
+  $('view').innerHTML=`<div class="row"><div class="card"><div class="sub">Still owed</div><div class="big ${owed?'over':''}">${gbp(owed)}</div></div><div class="card"><div class="sub">Earned this month</div><div class="big">${gbp(earned)}</div></div></div>
+  <h3>Waiting to pay</h3><div class="sub">Search a name or bank reference, then tap Paid.</div>`+
+  (l.map(c=>`<div class="card"><div class="row" style="align-items:center"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${c.visits.filter(v=>vOwed(v)>0).length} unpaid · since ${fmt(oldest(c))}${c.ref?' · ref '+esc(c.ref):''}</div></div><div class="over" style="flex:1;text-align:right;font-size:18px">${gbp(cOwed(c))}</div></div><div class="acts"><button class="btn pri" onclick="pay('${c.id}')">Paid in full</button><button class="btn" onclick="pay('${c.id}',true)">Part payment</button><button class="btn" onclick="invoice('${c.id}')">Invoice</button></div></div>`).join('')||`<div class="empty">${q?'No match.':'Nobody owes you anything.'}</div>`)+
+  `<div class="acts" style="margin-top:20px"><button class="btn" onclick="settings()">Settings</button><button class="btn" onclick="exp()">Back up data</button><button class="btn" onclick="imp()">Restore backup</button></div>`;
+}
+function pay(id,part){
+  const c=S.customers.find(x=>x.id===id);let amt=cOwed(c);
+  if(part){const a=prompt('How much did '+c.name+' pay? (£)');if(a===null)return;amt=Math.min(parseFloat(a)||0,amt);if(amt<=0)return}
+  act('Payment saved',()=>{let left=amt;c.visits.filter(v=>vOwed(v)>0).sort((a,b)=>a.date.localeCompare(b.date)).forEach(v=>{const t=Math.min(left,vOwed(v));if(t<=0)return;if(!v.pays)v.pays=v.part?[{d:v.date,a:v.part}]:[];v.pays.push({d:today(),a:t});v.part=(v.part||0)+t;left-=t;if(v.part>=v.amount-.005)v.paid=true})});
+}
+function edit(id){
+  const c=S.customers.find(x=>x.id===id)||{freq:4,pay:'bank'};
+  const f=(k,l,t='text',ex='')=>`<label>${l}</label><input id="f_${k}" type="${t}" value="${esc(c[k])}" ${ex}>`;
+  const fr=[...new Set([0,1,2,3,4,6,8,10,12,13,26,52,c.freq||0])].sort((a,b)=>a-b);
+  $('dform').innerHTML=`<h3 style="margin:0">${id?'Edit customer':'New customer'}</h3>
+  ${f('name','Name')}${f('address','Address')}
+  <div class="row"><div>${f('area','Area / street group')}</div><div>${f('phone','Phone','tel')}</div></div>
+  ${f('email','Email (for invoices)','email')}${navigator.contacts&&navigator.contacts.select?'<div class="acts"><button class="btn" onclick="pickContact()">Fill phone and email from my contacts</button></div>':''}
+  <label>Best way to contact</label><select id="f_contact">${['','phone call','text message','email'].map(o=>`<option value="${o}" ${o===(c.contact||'')?'selected':''}>${o||'No preference'}</option>`).join('')}</select>
+  ${f('services','Services (comma separated, type anything)')}${f('access','Gate code / access')}${f('extras','Other prices (e.g. gutters £30, conservatory roof £40)')}
+  <div class="row"><div>${f('price','Price per visit (£)','number','step="0.5"')}</div><div><label>Repeat every</label><select id="f_freq">${fr.map(n=>`<option value="${n}" ${n==(c.freq||0)?'selected':''}>${n?n+' weeks':'One-off'}</option>`).join('')}</select></div></div>
+  <div class="row"><div><label>Pays by</label><select id="f_pay"><option value="bank" ${c.pay!=='cash'?'selected':''}>Bank (unpaid until I tick it)</option><option value="cash" ${c.pay==='cash'?'selected':''}>Cash on the day (paid when done)</option></select></div><div>${f('ref','Name on bank statement')}</div></div>
+  <div class="row"><div>${f('last','Last cleaned','date')}</div><div>${f('nextWk','Move next clean to (optional)','date')}</div></div>
+  <label>Notes (gate codes, dogs, access)</label><textarea id="f_notes" rows="3">${esc(c.notes)}</textarea>
+  ${id?histHtml(c):''}<div class="acts"><button class="btn pri" onclick="saveC('${id||''}')">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button>${id?`<button class="btn" style="margin-left:auto;color:var(--red)" onclick="delC('${id}')">Delete</button>`:''}</div>`;
+  $('dlg').showModal();
+}
+function applyC(id){const g=k=>$('f_'+k).value.trim();if(!g('name')){alert('Add a name first');return null}
+  let c=S.customers.find(x=>x.id===id);if(!c){c={id:'c'+Date.now(),visits:[]};S.customers.push(c)}
+  Object.assign(c,{name:g('name'),address:g('address'),area:g('area'),phone:g('phone'),email:g('email'),contact:g('contact'),services:g('services'),access:g('access'),extras:g('extras'),price:parseFloat(g('price'))||0,freq:parseInt(g('freq'))||0,pay:g('pay'),ref:g('ref'),last:g('last')||null,nextWk:g('nextWk')?wk(g('nextWk')):null,notes:g('notes')});return c}
+function saveC(id){if(applyC(id)){save();$('dlg').close();render()}}
+function delC(id){if(confirm('Delete this customer and their job history?')){S.customers=S.customers.filter(c=>c.id!==id);save();$('dlg').close();render()}}
+function exp(){$('dform').innerHTML=`<h3 style="margin:0">Back up</h3><p class="sub">Copy this text and keep it somewhere safe (notes app, email to yourself).</p><textarea id="bk" rows="10" readonly>${esc(JSON.stringify(S))}</textarea><div class="acts"><button class="btn pri" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`;$('dlg').showModal()}
+function imp(){$('dform').innerHTML=`<h3 style="margin:0">Restore backup</h3><p class="sub">Paste your backup text. This replaces what is here now.</p><textarea id="bk" rows="10"></textarea><div class="acts"><button class="btn pri" onclick="doImp()">Restore</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;$('dlg').showModal()}
+function doImp(){try{const d=JSON.parse($('bk').value);if(!Array.isArray(d.customers))throw 0;S=d;S.plan=S.plan||{};save();$('dlg').close();render()}catch(e){alert('That does not look like a backup.')}}
+const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function sets(){return S.set=Object.assign({biz:'Paul Sparkes Window Cleaning',email:'info@paulsparkeswindowcleaning.co.uk',phone:'07969 920297',bank:'',msg:"Hi {name}, it's Paul from Paul Sparkes Window Cleaning. I'll be round to clean your windows {day}. No need to be in. Thanks!"},S.set||{})}
+function open_(href){const a=document.createElement('a');a.href=href;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
+function settings(){const t=sets();
+  $('dform').innerHTML=`<h3 style="margin:0">Settings</h3>
+  <label>Business name</label><input id="s_biz" value="${esc(t.biz)}">
+  <div class="row"><div><label>Email</label><input id="s_email" value="${esc(t.email)}"></div><div><label>Phone</label><input id="s_phone" value="${esc(t.phone)}"></div></div>
+  <label>Payment details shown on invoices (bank name, sort code, account number)</label><textarea id="s_bank" rows="3">${esc(t.bank)}</textarea>
+  <label>Text message. {name} and {day} fill in automatically</label><textarea id="s_msg" rows="4">${esc(t.msg)}</textarea>
+  ${cloudHtml()}
+  <label>Change PIN (4 to 8 digits, leave blank to keep the current one)</label><input id="s_pin" inputmode="numeric" maxlength="8" autocomplete="off">
+  <div class="acts"><button class="btn pri" onclick="saveSet()">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button><button class="btn" style="margin-left:auto" onclick="lockNow()">Lock now</button></div>`;$('dlg').showModal()}
+function saveSet(){const t=sets();['biz','email','phone','bank','msg'].forEach(k=>t[k]=$('s_'+k).value.trim());const np=$('s_pin').value.trim();if(np){if(!/^\d{4,8}$/.test(np)){alert('The PIN must be 4 to 8 digits');return}t.pin=np}save();$('dlg').close()}
+function invoice(id){const c=S.customers.find(x=>x.id===id),t=sets(),u=c.visits.filter(v=>vOwed(v)>0).sort((a,b)=>a.date.localeCompare(b.date));
+  const txt=`Hi ${c.name},\n\nInvoice from ${t.biz}\nDate: ${fmt(today())}\n\n${u.map(v=>fmt(v.date)+' - '+(c.services||'Window cleaning')+(v.note?' + '+v.note:'')+': '+gbp(vOwed(v))).join('\n')}\n\nTotal due: ${gbp(cOwed(c))}\n\n${t.bank?'Payment details:\n'+t.bank+'\n\n':''}Thank you,\n${t.biz}\n${t.phone} | ${t.email}`;
+  $('dform').innerHTML=`<h3 style="margin:0">Invoice for ${esc(c.name)}</h3>
+  <label>Send to</label><input id="i_to" type="email" value="${esc(c.email)}" placeholder="customer@email.com">
+  <label>Message (you can edit it)</label><textarea id="i_txt" rows="13">${esc(txt)}</textarea>
+  <div class="acts"><button class="btn pri" onclick="sendInv('${id}')">Open in email app</button><button class="btn" onclick="$('i_txt').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`;$('dlg').showModal()}
+function sendInv(id){const c=S.customers.find(x=>x.id===id),to=$('i_to').value.trim();if(to&&to!==c.email){c.email=to;save()}
+  open_('mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent('Invoice from '+sets().biz)+'&body='+encodeURIComponent($('i_txt').value))}
+let TX=[];
+function textDlg(){TX=S.customers.filter(c=>{const d=dueWk(c);return d&&(W==CUR()?d<=W:d===W)}).sort((a,b)=>(S.plan[W]||{})[a.id]-(S.plan[W]||{})[b.id]||a.name.localeCompare(b.name)).map(c=>({c,on:!!c.phone&&c.contact!=='email',sent:false}));drawTx();$('dlg').showModal()}
+function msgFor(c){const p=(S.plan[W]||{})[c.id],day=p!=null?'on '+DAYS[p]:(W==CUR()?'this week':'in the week of '+fmt(W));return sets().msg.replace(/\{name\}/g,c.name).replace(/\{day\}/g,day)}
+function drawTx(){const left=TX.filter(x=>x.on&&!x.sent).length,p=S.plan[W]||{};
+  $('dform').innerHTML=`<h3 style="margin:0">Text customers</h3><label>Message. {name} and {day} fill in automatically</label>
+  <textarea rows="4" oninput="sets().msg=this.value;save()">${esc(sets().msg)}</textarea>
+  <div class="sub" style="margin:8px 0">Tick who to text. Each message opens in your messages app ready to send, one customer at a time.</div>
+  ${TX.map((x,i)=>`<label class="row" style="align-items:center;color:var(--ink);font-size:16px;margin:0;padding:6px 0"><input type="checkbox" style="flex:none;width:22px;height:22px" ${x.on?'checked':''} ${x.c.phone?'':'disabled'} onchange="TX[${i}].on=this.checked;drawTx()"><span style="flex:4">${esc(x.c.name)}<div class="sub">${p[x.c.id]!=null?DAYS[p[x.c.id]]:'No day set'} · ${x.c.phone?esc(x.c.phone):'no phone number'}${x.c.contact?' · prefers '+esc(x.c.contact):''}</div></span><span class="ok" style="flex:none">${x.sent?'Sent ✓':''}</span></label>`).join('')||'<div class="empty">No jobs this week.</div>'}
+  <div class="acts"><button class="btn pri" onclick="sendNext()" ${left?'':'disabled'}>${left?'Text next ('+left+' left)':'All done'}</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`}
+function sendNext(){const x=TX.find(x=>x.on&&!x.sent);if(!x)return;x.sent=true;open_('sms:'+x.c.phone.replace(/[^\d+]/g,'')+'?&body='+encodeURIComponent(msgFor(x.c)));drawTx()}
+const qs=()=>S.quotes=S.quotes||[],qT=q=>q.lines.reduce((s,l)=>s+(parseFloat(l.p)||0),0);
+function qSent(q){if(!q.sent)return '<span class="sub">Not sent yet</span>';const n=Math.round((new Date(today()+'T12:00:00')-new Date(q.sent+'T12:00:00'))/864e5);return q.status==='open'&&n>=7?`<span class="over">Sent ${n} days ago. Worth a chase</span>`:`<span class="sub">Sent ${n?n+' day'+(n==1?'':'s')+' ago':'today'}</span>`}
+function quotesView(){
+  const all=qs(),l=all.filter(match).sort((a,b)=>b.date.localeCompare(a.date)),op=all.filter(q=>q.status==='open'),won=all.filter(q=>q.status==='won');
+  const grp=(st,h)=>{const g=l.filter(q=>q.status===st);return g.length?`<h3>${h}</h3>`+g.map(qCard).join(''):''};
+  $('view').innerHTML=`<div class="row"><div class="card"><div class="sub">Open quotes</div><div class="big">${op.length}</div><div class="sub">${gbp(op.reduce((s,q)=>s+qT(q),0))} per visit</div></div><div class="card"><div class="sub">Accepted</div><div class="big ok">${won.length}</div><div class="sub">of ${all.length} quotes</div></div></div>`+
+  (grp('open','Waiting for an answer')+grp('won','Accepted')+grp('lost','Declined')||'<div class="empty">No quotes yet. Tap + Quote to write your first.</div>');
+}
+function qCard(q){
+  const ls=q.lines.map(x=>esc(x.d)+(x.p?' '+gbp(x.p):'')).join(' · ');
+  return `<div class="card"><div class="row" style="align-items:start"><div style="flex:3"><h4>${esc(q.name)}</h4><div class="sub">${esc(q.address)}</div></div><div style="flex:1;text-align:right"><b>${gbp(qT(q))}</b><div class="sub">${q.freq?'every '+q.freq+'wk':'one-off'}</div></div></div>
+  <div class="sub" style="margin-top:4px">${ls}</div><div style="margin-top:4px">${q.status==='open'?qSent(q):q.status==='won'?'<span class="ok">Added to your customers</span>':'<span class="sub">Declined</span>'}</div>
+  <div class="acts">${q.status==='open'?`<button class="btn pri" onclick="qAccept('${q.id}')">Accepted ✓</button><button class="btn" onclick="qMail('${q.id}')">Email</button><button class="btn" onclick="qText('${q.id}')">Text</button><button class="btn" onclick="qSet('${q.id}','lost')">Declined</button>`:q.status==='lost'?`<button class="btn" onclick="qSet('${q.id}','open')">Reopen</button>`:''}<button class="btn" onclick="editQ('${q.id}')">Edit</button></div></div>`;
+}
+function qSet(id,st){act('Quote updated',()=>{qs().find(x=>x.id===id).status=st})}
+function qAccept(id){act('Added to customers',()=>{const q=qs().find(x=>x.id===id);q.status='won';S.customers.push({id:'c'+Date.now(),name:q.name,address:q.address,area:'',phone:q.phone,email:q.email,services:q.lines.map(l=>l.d).filter(Boolean).join(', '),price:qT(q),freq:q.freq||0,pay:'bank',ref:'',last:null,notes:q.notes,visits:[]})})}
+function qMsg(q){const t=sets();return `Hi ${q.name},\n\nThanks for asking about window cleaning. Here is my quote:\n\n${q.lines.map(l=>'- '+l.d+(l.p?': '+gbp(l.p):'')).join('\n')}\n\nTotal: ${gbp(qT(q))}${q.freq?' per visit, every '+q.freq+' weeks':''}\n${q.notes?'\n'+q.notes+'\n':''}\nGive me a shout if you would like to go ahead.\n\n${t.biz}\n${t.phone} | ${t.email}`}
+function qMail(id){const q=qs().find(x=>x.id===id);q.sent=today();save();render();open_('mailto:'+encodeURIComponent(q.email||'')+'?subject='+encodeURIComponent('Quote from '+sets().biz)+'&body='+encodeURIComponent(qMsg(q)))}
+function qText(id){const q=qs().find(x=>x.id===id);if(!q.phone){alert('Add a phone number first (tap Edit)');return}
+  const m=`Hi ${q.name}, it's Paul from ${sets().biz}. Your quote: ${q.lines.map(l=>l.d+(l.p?' '+gbp(l.p):'')).join(', ')}. Total ${gbp(qT(q))}${q.freq?' every '+q.freq+' weeks':''}. Let me know if you'd like to go ahead!`;
+  q.sent=today();save();render();open_('sms:'+q.phone.replace(/[^\d+]/g,'')+'?&body='+encodeURIComponent(m))}
+let QL=[],QF={},QID='';
+function editQ(id){const q=qs().find(x=>x.id===id)||{lines:[{d:'Windows',p:''}],freq:4};QID=id||'';QL=q.lines.map(l=>({...l}));QF={name:q.name||'',address:q.address||'',phone:q.phone||'',email:q.email||'',notes:q.notes||'',freq:q.freq};drawQ();$('dlg').showModal()}
+function readQ(){if(!$('q_name'))return;['name','address','phone','email','notes'].forEach(k=>QF[k]=$('q_'+k).value.trim());QF.freq=parseInt($('q_freq').value)||0;QL=QL.map((l,i)=>({d:$('ql_d'+i).value.trim(),p:$('ql_p'+i).value}))}
+function qTot(){QL=QL.map((l,i)=>({d:$('ql_d'+i).value,p:$('ql_p'+i).value}));$('q_tot').textContent=gbp(qT({lines:QL}))}
+function qLine(i){readQ();i==null?QL.push({d:'',p:''}):QL.splice(i,1);if(!QL.length)QL.push({d:'',p:''});drawQ()}
+function drawQ(){const fr=[...new Set([0,2,4,6,8,12,QF.freq||0])].sort((a,b)=>a-b),f=(k,l,t='text')=>`<label>${l}</label><input id="q_${k}" type="${t}" value="${esc(QF[k])}">`;
+  $('dform').innerHTML=`<h3 style="margin:0">${QID?'Edit quote':'New quote'}</h3>${f('name','Customer name')}${f('address','Address')}
+  <div class="row"><div>${f('phone','Phone','tel')}</div><div>${f('email','Email','email')}</div></div>
+  <label>What you are quoting for</label>${QL.map((l,i)=>`<div class="row" style="margin-bottom:6px"><input style="flex:3" id="ql_d${i}" value="${esc(l.d)}" placeholder="e.g. Windows, front and back" oninput="qTot()"><input style="flex:1" id="ql_p${i}" type="number" step="0.5" value="${esc(l.p)}" placeholder="£" oninput="qTot()"><button class="btn" style="flex:none" onclick="qLine(${i})">✕</button></div>`).join('')}
+  <div class="acts"><button class="btn" onclick="qLine()">+ Add line</button><b style="margin-left:auto">Total <span id="q_tot">${gbp(qT({lines:QL}))}</span></b></div>
+  <label>If they say yes, repeat every</label><select id="q_freq">${fr.map(n=>`<option value="${n}" ${n==(QF.freq||0)?'selected':''}>${n?n+' weeks':'One-off'}</option>`).join('')}</select>
+  <label>Notes (access, extras, how long the price is valid)</label><textarea id="q_notes" rows="3">${esc(QF.notes)}</textarea>
+  <div class="acts"><button class="btn pri" onclick="saveQ()">Save quote</button><button class="btn" onclick="$('dlg').close()">Cancel</button>${QID?`<button class="btn" style="margin-left:auto;color:var(--red)" onclick="delQ()">Delete</button>`:''}</div>`}
+function saveQ(){readQ();if(!QF.name){alert('Add a name first');return}
+  let q=qs().find(x=>x.id===QID);if(!q){q={id:'q'+Date.now(),date:today(),status:'open'};qs().push(q)}
+  Object.assign(q,QF,{lines:QL.filter(l=>l.d||l.p)});save();$('dlg').close();render()}
+function delQ(){if(confirm('Delete this quote?')){S.quotes=qs().filter(x=>x.id!==QID);save();$('dlg').close();render()}}
+let SEL=new Set();
+const wJobs=()=>S.customers.filter(c=>{const d=dueWk(c);return d&&(W==CUR()?d<=W:d===W)});
+function tog(id){SEL.has(id)?SEL.delete(id):SEL.add(id);paint()}
+function selGroup(k){const p=S.plan[W]||{},ids=wJobs().filter(c=>String(gk(c,p))===String(k)).map(c=>c.id),all=ids.every(i=>SEL.has(i));ids.forEach(i=>all?SEL.delete(i):SEL.add(i));paint()}
+function bulk(d){act('Days set',()=>{const p=S.plan[W]=S.plan[W]||{};SEL.forEach(id=>{d===null?delete p[id]:p[id]=d});SEL.clear()})}
+function selBar(){const b=$('selbar'),on=tab==='week'&&SEL.size>0;b.style.display=on?'block':'none';$('fab').style.display=on?'none':'';
+  if(on)b.innerHTML=`<div style="font-weight:700;margin-bottom:6px">${SEL.size} selected. Move to:</div><div class="days" style="margin:0">${DN.map((n,i)=>`<button onclick="bulk(${i})">${n}</button>`).join('')}</div><div class="acts" style="margin-top:6px"><button class="btn" onclick="bulk(null)">Take off days</button><button class="btn" onclick="SEL.clear();paint()">Cancel</button></div>`}
+function histHtml(c){const v=(c.visits||[]).map((x,i)=>({...x,i})).sort((a,b)=>b.date.localeCompare(a.date));
+  return `<h3>Clean history</h3>`+(v.map(x=>`<div class="row" style="align-items:center;padding:4px 0"><span style="flex:3">${fmt(x.date)}${x.note?'<div class="sub">'+esc(x.note)+'</div>':''}</span><span style="flex:2;text-align:right">${gbp(x.amount)} <span class="${x.paid?'ok':'over'}">${x.paid?'paid':'unpaid'}</span></span><button class="btn" style="flex:none;padding:4px 10px" onclick="delV('${c.id}',${x.i})">✕</button></div>`).join('')||'<div class="sub">No cleans logged yet.</div>')+`<div class="row" style="margin-top:8px"><input id="h_d" type="date"><input id="h_a" type="number" step="0.5" placeholder="£ (blank = usual price)"></div><div class="acts"><button class="btn" onclick="addV('${c.id}',false)">Add past clean (paid)</button><button class="btn" onclick="addV('${c.id}',true)">Add as unpaid</button></div>`}
+const lastOf=c=>c.visits.length?c.visits.map(v=>v.date).sort().pop():null;
+function addV(id,unpaid){const c=applyC(id);if(!c)return;const d=$('h_d').value;if(!d){alert('Pick the date of the clean');return}
+  c.visits.push({date:d,amount:parseFloat($('h_a').value)||+c.price||0,paid:!unpaid});c.last=lastOf(c);save();edit(id)}
+function delV(id,i){const c=applyC(id);if(!c||!confirm('Remove this clean from the history?'))return;c.visits.splice(i,1);c.last=lastOf(c);save();edit(id)}
+function moveDlg(id){const c=S.customers.find(x=>x.id===id),d=dueWk(c);
+  $('dform').innerHTML=`<h3 style="margin:0">Move ${esc(c.name)}</h3><div class="sub">Currently due: week of ${fmt(d||CUR())}</div>
+  <div class="acts"><button class="btn pri" onclick="moveTo('${id}',addDays(W,7))">Next week</button><button class="btn" onclick="moveTo('${id}',addDays(W,14))">In 2 weeks</button><button class="btn" onclick="moveTo('${id}',addDays(W,28))">In 4 weeks</button></div>
+  <label>Or pick a date</label><div class="row"><input id="mv_d" type="date"><button class="btn" style="flex:none" onclick="if($('mv_d').value)moveTo('${id}',$('mv_d').value)">Move</button></div>
+  <div class="acts"><button class="btn" onclick="$('dlg').close()">Cancel</button>${c.nextWk?`<button class="btn" onclick="moveTo('${id}',null)">Back to normal schedule</button>`:''}</div>`;$('dlg').showModal()}
+function moveTo(id,d){$('dlg').close();act('Job moved',()=>{const c=S.customers.find(x=>x.id===id);c.nextWk=d?wk(d):null;Object.values(S.plan).forEach(p=>delete p[id])})}
+function extraDlg(id){const c=S.customers.find(x=>x.id===id);
+  $('dform').innerHTML=`<h3 style="margin:0">Extra work for ${esc(c.name)}</h3><div class="sub">Shows on this clean only. The price is added when you tick Done, then it clears.</div>${c.extras?`<div class="sub">Their other prices: ${esc(c.extras)}</div>`:''}
+  <label>What extra work</label><input id="x_n" value="${esc(c.extraNote)}" placeholder="e.g. gutters, conservatory roof"><label>Extra price (£)</label><input id="x_p" type="number" step="0.5" value="${esc(c.extraPrice||'')}">
+  <div class="acts"><button class="btn pri" onclick="saveX('${id}')">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;$('dlg').showModal()}
+function saveX(id){const c=S.customers.find(x=>x.id===id);c.extraNote=$('x_n').value.trim();c.extraPrice=parseFloat($('x_p').value)||0;save();$('dlg').close();render()}
+let mtab='pay';
+const CATS=['Fuel','Vehicle costs','Equipment & supplies','Insurance','Phone & software','Advertising','Wages / help','Bank & accountancy','Other'];
+const rec=v=>v.pays?v.pays:v.paid?[{d:v.date,a:v.amount}]:v.part?[{d:v.date,a:v.part}]:[];
+const tyOf=d=>{const y=+d.slice(0,4);return d>=y+'-04-06'?y:y-1};
+const inTY=(d,y)=>d>=y+'-04-06'&&d<=(y+1)+'-04-05';
+const tyLab=y=>y+'/'+String(y+1).slice(2);
+let TY=tyOf(today());
+function moneyView(){
+  const sub=`<div class="days" style="margin:0 0 8px">${[['pay','Payments'],['out','Outgoings'],['tax','Tax year']].map(([k,l])=>`<button class="${mtab==k?'on':''}" onclick="mtab='${k}';render()">${l}</button>`).join('')}</div>`;
+  mtab==='pay'?payView():mtab==='out'?outView():taxView();$('view').innerHTML=sub+$('view').innerHTML}
+function outView(){
+  const ex=(S.exp||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  $('view').innerHTML=`<div class="card"><b>Add an outgoing</b>
+  <div class="row"><div><label>Date</label><input id="e_d" type="date" value="${today()}"></div><div><label>Amount (£)</label><input id="e_a" type="number" step="0.01" placeholder="0.00"></div></div>
+  <label>Type</label><select id="e_c">${CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+  <label>What was it? (optional)</label><input id="e_n" placeholder="e.g. Diesel, new squeegee, van service">
+  <div class="acts"><button class="btn pri" onclick="addExp()">Add outgoing</button></div></div>
+  <h3>Recent outgoings</h3>`+(ex.map(e=>`<div class="card row" style="align-items:center"><div style="flex:3"><b>${esc(e.desc||e.cat)}</b><div class="sub">${fmt(e.date)} · ${esc(e.cat)}</div></div><b style="flex:none">${gbp(e.amt)}</b><button class="btn" style="flex:none;padding:6px 10px" onclick="delExp('${e.id}')">✕</button></div>`).join('')||'<div class="empty">Nothing added yet. Keep your receipts, this is just your tally.</div>')}
+function addExp(){const d=$('e_d').value||today(),a=parseFloat($('e_a').value);if(!(a>0)){alert('Enter the amount first');return}
+  act('Outgoing added',()=>{(S.exp=S.exp||[]).push({id:'e'+Date.now(),date:d,cat:$('e_c').value,desc:$('e_n').value.trim(),amt:a})})}
+function delExp(id){act('Outgoing removed',()=>{S.exp=S.exp.filter(e=>e.id!==id)})}
+function tyData(){
+  const all=S.customers.flatMap(c=>(c.visits||[]).map(v=>({c,v}))),sum=(l,f)=>l.reduce((s,x)=>s+f(x),0);
+  const work=all.filter(x=>inTY(x.v.date,TY)).sort((a,b)=>a.v.date.localeCompare(b.v.date)),recs=all.flatMap(x=>rec(x.v).map(r=>({...r,c:x.c}))).filter(r=>inTY(r.d,TY)),exs=(S.exp||[]).filter(e=>inTY(e.date,TY)).sort((a,b)=>a.date.localeCompare(b.date));
+  return {all,work,recs,exs,inc:sum(recs,r=>r.a),out:sum(exs,e=>e.amt),done:sum(work,x=>x.v.amount),owed:sum(work,x=>vOwed(x.v))}}
+function taxView(){
+  const yrs=new Set([tyOf(today())]);S.customers.forEach(c=>(c.visits||[]).forEach(v=>yrs.add(tyOf(v.date))));(S.exp||[]).forEach(e=>yrs.add(tyOf(e.date)));
+  if(!yrs.has(TY))TY=tyOf(today());
+  const D=tyData(),cat={},mo={};
+  D.exs.forEach(e=>{cat[e.cat]=(cat[e.cat]||0)+e.amt;const m=mo[e.date.slice(0,7)]=mo[e.date.slice(0,7)]||{i:0,o:0};m.o+=e.amt});
+  D.recs.forEach(r=>{const m=mo[r.d.slice(0,7)]=mo[r.d.slice(0,7)]||{i:0,o:0};m.i+=r.a});
+  const pr=D.inc-D.out;
+  $('view').innerHTML=`<label style="margin-top:0">Tax year (6 April to 5 April)</label><select onchange="TY=+this.value;render()">${[...yrs].sort((a,b)=>b-a).map(y=>`<option value="${y}" ${y==TY?'selected':''}>${tyLab(y)}</option>`).join('')}</select>
+  <div class="row" style="margin-top:8px"><div class="card"><div class="sub">Money received</div><div class="big">${gbp(D.inc)}</div></div><div class="card"><div class="sub">Outgoings</div><div class="big">${gbp(D.out)}</div></div></div>
+  <div class="card"><div class="sub">Profit (received minus outgoings)</div><div class="big ${pr<0?'over':'ok'}">${gbp(pr)}</div></div>
+  <div class="card"><div class="row"><div><div class="sub">Work done</div><b>${gbp(D.done)}</b><div class="sub">${D.work.length} jobs</div></div><div><div class="sub">Still unpaid</div><b class="${D.owed?'over':''}">${gbp(D.owed)}</div></div></div></div>
+  <h3>Outgoings by type</h3>`+(Object.entries(cat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="row" style="padding:3px 2px"><span>${esc(k)}</span><b style="text-align:right">${gbp(v)}</b></div>`).join('')||'<div class="sub">None yet.</div>')+
+  `<h3>Month by month</h3><div class="row sub" style="padding:3px 2px"><span>Month</span><span style="text-align:right">In</span><span style="text-align:right">Out</span></div>`+
+  Object.keys(mo).sort().map(k=>`<div class="row" style="padding:3px 2px"><span>${new Date(k+'-15T12:00:00').toLocaleDateString('en-GB',{month:'short',year:'2-digit'})}</span><span style="text-align:right">${gbp(mo[k].i)}</span><span style="text-align:right">${gbp(mo[k].o)}</span></div>`).join('')+
+  `<div class="acts" style="margin-top:14px"><button class="btn pri" onclick="exportTy()">Copy records for a spreadsheet</button></div>
+  <div class="sub" style="margin-top:10px">Money received counts on the day you marked it paid. Cash jobs count on the day of the clean. Payments logged before this update count on the clean date. This is a tally to help your records, so check with your accountant or HMRC what you can claim.</div>`}
+function exportTy(){
+  const D=tyData(),c=x=>String(x==null?'':x).replace(/[\t\r\n]+/g,' '),L=[];
+  L.push('Paul Sparkes Window Cleaning - tax year '+tyLab(TY),'','JOBS','Date\tCustomer\tAddress\tWork\tAmount\tPaid\tReceived');
+  D.work.forEach(x=>L.push([x.v.date,c(x.c.name),c(x.c.address),c((x.c.services||'')+(x.v.note?' + '+x.v.note:'')),x.v.amount.toFixed(2),x.v.paid?'Yes':vOwed(x.v)<x.v.amount?'Part':'No',rec(x.v).map(r=>r.d+' £'+r.a.toFixed(2)).join('; ')].join('\t')));
+  L.push('','OUTGOINGS','Date\tType\tDetails\tAmount');
+  D.exs.forEach(e=>L.push([e.date,c(e.cat),c(e.desc),e.amt.toFixed(2)].join('\t')));
+  L.push('','Work done\t'+D.done.toFixed(2),'Money received\t'+D.inc.toFixed(2),'Outgoings\t'+D.out.toFixed(2),'Profit\t'+(D.inc-D.out).toFixed(2),'Still unpaid\t'+D.owed.toFixed(2));
+  $('dform').innerHTML=`<h3 style="margin:0">Records ${tyLab(TY)}</h3><p class="sub">Tap Copy, then paste into Excel, Google Sheets, or an email to your accountant.</p><textarea id="bk" rows="12" readonly>${esc(L.join('\n'))}</textarea><div class="acts"><button class="btn pri" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`;$('dlg').showModal()}
+function gk(c,p){return p[c.id]!=null?p[c.id]:(dueWk(c)<W?'o':'u')}
+function pinVal(){return (S.set&&S.set.pin)||'5431'}
+function chkPin(force){const v=$('pin').value,pv=pinVal();
+  if(v===pv){try{sessionStorage.setItem('psw-ok','1')}catch(e){}$('lock').style.display='none';$('pin').value='';$('pinerr').textContent=''}
+  else if(force||v.length>=pv.length){$('pinerr').textContent='Wrong PIN';$('pin').value=''}}
+function lockNow(){try{sessionStorage.removeItem('psw-ok')}catch(e){}$('dlg').close();$('pin').value='';$('pinerr').textContent='';$('lock').style.display='flex'}
+try{if(sessionStorage.getItem('psw-ok')==='1')$('lock').style.display='none'}catch(e){}
+function exportDlg(mode){
+  const c=x=>String(x==null?'':x).replace(/[\t\r\n]+/g,' '),L=[];let note;
+  if(mode==='full'){L.push(JSON.stringify(S));note='Everything in the app, including your PIN. Keep it private. Use Restore backup on the Money tab to load it somewhere else.'}
+  else if(mode==='hist'){L.push('Date\tCustomer\tAddress\tArea\tWork\tAmount\tPaid\tNote');
+    S.customers.flatMap(x=>(x.visits||[]).map(v=>({x,v}))).sort((a,b)=>a.v.date.localeCompare(b.v.date)).forEach(({x,v})=>L.push([v.date,c(x.name),c(x.address),c(x.area),c(x.services),v.amount.toFixed(2),v.paid?'Yes':vOwed(v)<v.amount?'Part':'No',c(v.note)].join('\t')));note='Every clean you have logged. Paste into Excel or Google Sheets.'}
+  else{L.push('Name\tAddress\tArea\tPhone\tEmail\tBest contact\tServices\tAccess\tOther prices\tPrice\tRepeat (weeks)\tPays by\tBank name\tLast cleaned\tNext due (week of)\tOwes\tNotes');
+    S.customers.slice().sort((a,b)=>(a.area||'~').localeCompare(b.area||'~')||a.name.localeCompare(b.name)).forEach(x=>L.push([x.name,x.address,x.area,x.phone,x.email,x.contact,x.services,x.access,x.extras,(+x.price||0).toFixed(2),x.freq||0,x.pay,x.ref,x.last||'',dueWk(x)||'',cOwed(x).toFixed(2),x.notes].map(c).join('\t')));note='Your customer list, grouped by area. Paste into Excel or Google Sheets.'}
+  const tab=(m,l)=>`<button class="${mode===m?'on':''}" onclick="exportDlg('${m}')">${l}</button>`;
+  $('dform').innerHTML=`<h3 style="margin:0">Export</h3><div class="days" style="margin:8px 0">${tab('list','Customers')}${tab('hist','Cleans')}${tab('full','Full backup')}</div><p class="sub">${note}</p><textarea id="bk" rows="10" readonly>${esc(L.join('\n'))}</textarea><div class="acts"><button class="btn pri" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div><div class="sub" style="margin-top:8px">Earnings and outgoings for the tax year are under Money, then Tax year.</div>`;
+  if(!$('dlg').open)$('dlg').showModal()}
+/* ---------- Cloud sync (Firebase). Paste your config here, or in Settings ---------- */
+const FB_CONFIG={apiKey:"AIzaSyAPtRhYaIMUcYbRzdW8NGogJHDeL13cwQA",authDomain:"pswc-ad7a4.firebaseapp.com",projectId:"pswc-ad7a4",storageBucket:"pswc-ad7a4.firebasestorage.app",messagingSenderId:"591123251230",appId:"1:591123251230:web:2233d1da49d2f5faa9ee0f"};
+let FB=null,CUID=null,unsub=null,pushT=null,pushing=false,queued=false,fbStat='Cloud sync not set up';
+const fbCfg=()=>{try{return FB_CONFIG||JSON.parse(localStorage.getItem('psw-fb')||'null')}catch(e){return null}};
+const hasData=()=>S.customers.length||(S.exp&&S.exp.length)||(S.quotes&&S.quotes.length);
+function stat(t){fbStat=t;const e=$('cs');if(e)e.textContent=t}
+const setLast=v=>{try{localStorage.setItem('psw-last',v)}catch(e){}};
+async function cloudInit(){
+  const cfg=fbCfg();if(!cfg){stat('Cloud sync not set up');return}
+  stat('Cloud: connecting');
+  try{
+    const u=m=>`https://www.gstatic.com/firebasejs/10.14.1/firebase-${m}.js`;
+    const [A,Au,F]=await Promise.all([import(u('app')),import(u('auth')),import(u('firestore'))]);
+    const app=A.initializeApp(cfg);FB={Au,F,auth:Au.getAuth(app),db:F.getFirestore(app)};
+    Au.onAuthStateChanged(FB.auth,user=>{CUID=user?user.uid:null;if(unsub){unsub();unsub=null}
+      if(user){stat('Cloud: connecting');listen()}else stat('Cloud: signed out. Tap here to sign in')});
+  }catch(e){stat('Cloud unavailable here')}
+}
+function listen(){const col=FB.F.collection(FB.db,'users',CUID,'store');
+  unsub=FB.F.onSnapshot(col,snap=>{if(pushing||pushT)return;
+    const m={};snap.forEach(d=>m[d.id]=d.data().t||'');let cloud=null;
+    if(m.meta){const n=+JSON.parse(m.meta).n;cloud='';for(let i=0;i<n;i++)cloud+=m['c'+String(i).padStart(3,'0')]||''}
+    onCloud(cloud)},e=>stat('Cloud error: '+(e.code||'unknown')))}
+function onCloud(cloud){
+  const loc=JSON.stringify(S),last=localStorage.getItem('psw-last');
+  if(!cloud){if(hasData()){if(confirm('Upload the customers on this device to your cloud account?'))pushNow();else stat('Cloud: not uploaded yet')}else stat('Cloud: synced ✓');return}
+  if(cloud===loc){setLast(loc);stat('Cloud: synced ✓');return}
+  if(!hasData()||last===loc){adopt(cloud);return}
+  let cn='?';try{cn=JSON.parse(cloud).customers.length}catch(e){}
+  $('dform').innerHTML=`<h3 style="margin:0">Two different copies found</h3><p>The cloud copy has <b>${cn}</b> customers. This device has <b>${S.customers.length}</b>. Which one should be kept?</p><div class="acts"><button class="btn pri" onclick="adopt(window._cl);$('dlg').close()">Use the cloud copy</button><button class="btn" onclick="$('dlg').close();pushNow()">Keep this device, replace the cloud</button></div>`;
+  window._cl=cloud;if(!$('dlg').open)$('dlg').showModal()}
+function adopt(cloud){try{S=JSON.parse(cloud);S.plan=S.plan||{};localStorage.setItem(KEY,cloud);setLast(cloud);stat('Cloud: synced ✓');render()}catch(e){stat('Cloud: could not read the cloud copy')}}
+async function pushNow(){
+  if(!FB||!CUID)return;const str=JSON.stringify(S);pushing=true;stat('Cloud: saving...');
+  try{const col=FB.F.collection(FB.db,'users',CUID,'store'),b=FB.F.writeBatch(FB.db);let n=0;
+    for(let i=0;i<str.length;i+=200000,n++)b.set(FB.F.doc(col,'c'+String(n).padStart(3,'0')),{t:str.slice(i,i+200000)});
+    b.set(FB.F.doc(col,'meta'),{t:JSON.stringify({n})});await b.commit();setLast(str);stat('Cloud: synced ✓')}
+  catch(e){stat('Cloud: not saved ('+(e.code||'offline')+')')}
+  pushing=false}
+function cloudPush(){if(!FB||!CUID)return;clearTimeout(pushT);pushT=setTimeout(async()=>{pushT=null;if(pushing){queued=true;return}await pushNow();if(queued){queued=false;cloudPush()}},800)}
+function cloudTap(){if(FB&&!CUID)signInDlg();else if(!fbCfg()||FB)settings()}
+function signInDlg(){if(!FB){alert('Cloud sync is not ready yet. Add your Firebase config in Settings first.');return}
+  $('dform').innerHTML=`<h3 style="margin:0">Sign in to your cloud</h3><label>Email</label><input id="si_e" type="email" autocomplete="username"><label>Password</label><input id="si_p" type="password" autocomplete="current-password"><div id="si_err" class="over" style="min-height:22px;margin-top:6px"></div><div class="acts"><button class="btn pri" onclick="doSignIn()">Sign in</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;if(!$('dlg').open)$('dlg').showModal()}
+async function doSignIn(){try{await FB.Au.signInWithEmailAndPassword(FB.auth,$('si_e').value.trim(),$('si_p').value);$('dlg').close()}catch(e){$('si_err').textContent='Could not sign in ('+String(e.code||'error').replace('auth/','')+')'}}
+function signOutCloud(){if(FB)FB.Au.signOut(FB.auth)}
+function pushConfirm(){if(confirm('Replace the cloud copy with what is on this device?')){$('dlg').close();pushNow()}}
+function saveFb(){const o={};[...($('s_fb').value).matchAll(/(\w+)\s*:\s*["']([^"']+)["']/g)].forEach(m=>o[m[1]]=m[2]);
+  if(!o.apiKey||!o.projectId){alert('That does not look like the Firebase config. Copy the whole block again.');return}
+  try{localStorage.setItem('psw-fb',JSON.stringify(o))}catch(e){}location.reload()}
+function cloudHtml(){return `<h3 style="margin:14px 0 4px">Cloud sync</h3><div class="sub">${esc(fbStat)}</div><div class="acts">${FB?(CUID?`<button class="btn" onclick="pushConfirm()">Upload this device now</button><button class="btn" onclick="signOutCloud();$('dlg').close()">Sign out</button>`:`<button class="btn pri" onclick="signInDlg()">Sign in</button>`):''}</div>${FB_CONFIG?'':`<label>Firebase config (paste the block Firebase gave you)</label><textarea id="s_fb" rows="4" placeholder="apiKey: ..., authDomain: ..., projectId: ..."></textarea><div class="acts"><button class="btn" onclick="saveFb()">Save cloud setup</button></div>`}`}
+const miss=c=>[!c.address&&'address',!c.area&&'area',!c.phone&&'phone',!c.email&&'email',!(+c.price)&&'price',!c.freq&&'repeat',!c.last&&!c.nextWk&&'last cleaned'].filter(Boolean);
+async function pickContact(){try{const r=await navigator.contacts.select(['name','tel','email'],{multiple:false});if(!r.length)return;const x=r[0];
+  if(x.tel&&x.tel[0])$('f_phone').value=x.tel[0].replace(/\s+/g,' ');if(x.email&&x.email[0])$('f_email').value=x.email[0];if(x.name&&x.name[0]&&!$('f_name').value)$('f_name').value=x.name[0]}catch(e){}}
+const IMP=[['address','Address (identifies each customer)',/address|street|road|house|property/i],['name','Name (optional)',/name|customer|client/i],['email','Email',/e-?mail/i],['area','Area',/area|round|zone|patch|district|town|village/i],['phone','Phone',/phone|mobile|tel|number/i],['services','Services',/service|work|job|type/i],['price','Price',/price|cost|charge|£|amount|fee/i],['freq','Repeat (weeks)',/freq|every|week|rota|cycle|interval/i],['last','Last cleaned',/last|cleaned|done|previous|date/i],['pay','Pays by (cash/bank)',/pay|method/i],['ref','Name on bank statement',/ref|bank/i],['access','Gate code / access',/gate|access|code|key/i],['extras','Other prices',/extra|gutter|other/i],['notes','Notes',/note|info|comment|detail|remark/i]];
+let IM=null;
+function tsv(t){const sep=t.includes('\t')?'\t':',',R=[];let r=[],c='',q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
+    else if(ch==='"'&&c==='')q=true;else if(ch===sep){r.push(c);c=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);R.push(r);r=[];c=''}else c+=ch}
+  if(c!==''||r.length){r.push(c);R.push(r)}return R.filter(r=>r.some(x=>x.trim()))}
+function parseDate(v){v=String(v).trim();if(!v)return null;let m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if(m){let y=+m[3];if(y<100)y+=2000;const d=new Date(y,+m[2]-1,+m[1],12);return d.getMonth()==+m[2]-1?iso(d):null}
+  if(/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);const d=new Date(v);return isNaN(d)?null:iso(d)}
+function fixPhone(v){const dg=String(v).replace(/\D/g,'');return /^7\d{9}$/.test(dg)?'0'+dg:String(v).trim()}
+function impDlg(){$('dform').innerHTML=`<h3 style="margin:0">Import from your spreadsheet</h3><p class="sub">In Google Sheets, select your whole customer list <b>including the top row of headings</b>, copy it, and paste it here. You can do this again later with an updated sheet. It only fills in blanks and never makes duplicates.</p><textarea id="im_t" rows="8" placeholder="Paste here"></textarea><div class="acts"><button class="btn pri" onclick="impNext()">Next</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;if(!$('dlg').open)$('dlg').showModal()}
+const MON=/^(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)(\W|\d|$)/i,MI=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+function monthCols(){const o=[];let yr=+IM.year||new Date().getFullYear(),prev=-1;
+  IM.head.forEach((h,i)=>{const t=h.trim();if(!MON.test(t))return;const mo=MI.indexOf(t.slice(0,3).toLowerCase()),my=t.match(/(20\d\d|\b\d\d$)/);let y;
+    if(my){y=my[1].length==2?2000+ +my[1]:+my[1];yr=y}else{if(prev>=0&&mo<prev)yr++;y=yr}
+    prev=mo;o.push({i,mo,yr:y,label:t})});return o}
+function impNext(){const rows=tsv($('im_t').value);if(rows.length<2){alert('I need the heading row plus at least one customer. Copy the cells from Google Sheets and paste again.');return}
+  const head=rows[0].map(h=>h.trim());IM={head,data:rows.slice(1),map:{},year:new Date().getFullYear(),fresh:true};
+  const used=new Set(monthCols().map(x=>x.i));
+  [...IMP].sort((a,b)=>(a[0]==='email'?-1:0)-(b[0]==='email'?-1:0)).forEach(([k,,re])=>{let i=head.findIndex((h,j)=>!used.has(j)&&re.test(h));if(k==='address'&&i<0&&!used.has(0))i=0;IM.map[k]=i;if(i>=0)used.add(i)});
+  impMap()}
+function impMap(){
+  $('dform').innerHTML=`<h3 style="margin:0">Check the columns</h3><p class="sub">I matched your headings automatically. Fix any that look wrong. Month columns (Jan, Feb...) hold the price when a clean is done and the date of the next one, like 3-nov.</p>`+IMP.map(([k,l])=>`<label>${l}</label><select onchange="IM.map['${k}']=+this.value;impPrev()"><option value="-1">(not in my sheet)</option>${IM.head.map((h,i)=>`<option value="${i}" ${IM.map[k]===i?'selected':''}>${esc(h||'Column '+(i+1))}</option>`).join('')}</select>`).join('')+
+  `<label>Year of the first month column</label><input type="number" value="${IM.year}" onchange="IM.year=+this.value;impPrev()">
+  <label class="row" style="align-items:center;color:var(--ink);font-size:15px"><input type="checkbox" style="flex:none;width:22px;height:22px" checked onchange="IM.fresh=this.checked;impPrev()"><span style="flex:5">Start fresh: remove the customers already in the app first</span></label>
+  <div id="im_pv" class="card"></div><div class="acts"><button class="btn pri" onclick="impGo()">Import</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;impPrev()}
+function impRun(dry){const m=IM.map,g=(r,k)=>m[k]>=0?String(r[m[k]]||'').trim():'',mc=monthCols(),t0=today(),cutoff=addDays(t0,-120),curKey=+t0.slice(0,4)*12+ +t0.slice(5,7)-1;
+  const norm=a=>String(a).toLowerCase().replace(/[^a-z0-9]/g,'');
+  const tr={price:v=>parseFloat(String(v).replace(/[^\d.]/g,''))||0,freq:v=>{const x=String(v).match(/\d+/);return x?+x[0]:/fortnight/i.test(v)?2:/month/i.test(v)?4:/week/i.test(v)?1:0},last:parseDate,phone:fixPhone,pay:v=>/cash/i.test(v)?'cash':'bank'};
+  const DM=/\b(\d{1,2})(?:st|nd|rd|th)?\s*[-\/ ]\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b(?:\s*[-\/ ]\s*(\d{4}|\d{2})\b)?/i,NM=/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}|\d{2}))?\b/;
+  const list=dry?JSON.parse(JSON.stringify(S.customers)):S.customers;if(IM.fresh){list.length=0;if(!dry)S.plan={}}
+  let add=0,upd=0,dates=0,guess=0;const sample=[];
+  IM.data.forEach((r,n)=>{const addr=g(r,'address'),nm=g(r,'name');if(!addr&&!nm)return;
+    const vals={};IMP.forEach(([k])=>{if(k==='name'||k==='address'||m[k]<0)return;const v=g(r,k);if(!v)return;const x=tr[k]?tr[k](v):v;if(x)vals[k]=x});
+    const pts=[],dts=[];let lastP=null;
+    mc.forEach(({i,mo,yr})=>{let raw=String(r[i]||'').trim();if(!raw)return;let d=null,mm=raw.match(DM);
+      if(mm&&+mm[1]>=1&&+mm[1]<=31){const mo2=MI.indexOf(mm[2].toLowerCase()),y=mm[3]?(mm[3].length==2?2000+ +mm[3]:+mm[3]):(mo2<mo?yr+1:yr);d=new Date(y,mo2,+mm[1],12);raw=raw.replace(mm[0],'')}
+      else if((mm=raw.match(NM))&&+mm[1]>=1&&+mm[1]<=31&&+mm[2]>=1&&+mm[2]<=12){const y=mm[3]?(mm[3].length==2?2000+ +mm[3]:+mm[3]):(+mm[2]-1<mo?yr+1:yr);d=new Date(y,+mm[2]-1,+mm[1],12);raw=raw.replace(mm[0],'')}
+      if(d&&!isNaN(d)){dts.push(iso(d));pts.push(d.getFullYear()*12+d.getMonth())}
+      const amt=parseFloat(raw.replace(/[^\d.]/g,''));
+      if(amt>0){const key=yr*12+mo;pts.push(key);if(!lastP||key>=lastP.key)lastP={key,amt,yr,mo}}});
+    const nd=dts.filter(x=>x>=wk(t0)).sort()[0]||dts.filter(x=>x<wk(t0)&&x>=cutoff).sort().pop()||null;
+    const ex=list.find(c=>(addr&&c.address&&norm(c.address)===norm(addr))||(!addr&&nm&&c.name.toLowerCase()===nm.toLowerCase()));
+    let c=ex,ch=false;
+    if(!c){c={id:'c'+Date.now()+'_'+n,name:nm||addr,address:addr,area:'',phone:'',email:'',services:'',price:0,freq:0,pay:'bank',ref:'',last:null,notes:'',visits:[]};list.push(c);add++}
+    else{if(addr&&!c.address){c.address=addr;ch=true}if(nm&&(!c.name||c.name===c.address)){c.name=nm;ch=true}}
+    Object.entries(vals).forEach(([k,v])=>{if(!c[k]){c[k]=v;ch=true}});
+    if(lastP&&!(+c.price)){c.price=lastP.amt;ch=true}
+    const up=[...new Set(pts)].sort((a,b)=>a-b);
+    if(!c.freq&&up.length>=2){const gp=up.slice(1).map((x,j)=>x-up[j]).sort((a,b)=>a-b),med=gp[Math.floor(gp.length/2)];c.freq=Math.min(52,med*4);guess++;ch=true}
+    if(nd&&!c.nextWk){c.nextWk=wk(nd);dates++;ch=true}
+    else if(!nd&&lastP&&lastP.yr*12+lastP.mo<=curKey&&!c.last&&!c.nextWk){let d=lastP.yr+'-'+String(lastP.mo+1).padStart(2,'0')+'-15';if(d>t0)d=t0;c.last=d;ch=true}
+    if(!ex&&sample.length<3)sample.push(c.name+(c.price?': '+gbp(c.price):'')+(c.freq?', every '+c.freq+' wk':'')+(nd?', due '+fmt(nd):''));
+    if(ex&&ch)upd++});
+  return {add,upd,dates,guess,sample,mc}}
+function impPrev(){if(IM.map.address<0&&IM.map.name<0){$('im_pv').innerHTML='<span class="over">Choose which column holds the address.</span>';return}
+  const r=impRun(true),mc=r.mc;$('im_pv').innerHTML=`<b>${r.add}</b> new customers${r.upd?`, <b>${r.upd}</b> existing ones updated`:''}.${r.sample.map(x=>`<div class="sub" style="margin-top:4px">${esc(x)}</div>`).join('')}
+  <div style="margin-top:6px">${mc.length?`<b>${r.dates}</b> customers have a next due date in the month columns (${mc.length} month columns found, ${esc(mc[0].label)} to ${esc(mc[mc.length-1].label)}).`:'<span class="over">No month columns found. Month headings need to start with a month name, like Jan or January 2026.</span>'}</div>
+  ${r.guess?`<div class="sub" style="margin-top:4px">${r.guess} repeats were worked out from the gaps between months, counting each month as 4 weeks. Please check a few.</div>`:''}`}
+function impGo(){if(IM.map.address<0&&IM.map.name<0)return;if(IM.fresh&&S.customers.length&&!confirm('Remove the '+S.customers.length+' customers already in the app, then import?'))return;
+  $('dlg').close();act('Customers imported',()=>{impRun(false)});tab='all';gb='gaps';render()}
+render();
+cloudInit();
+</script>
+</body>
+</html>
