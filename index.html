@@ -13,7 +13,9 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Avenir Next","Segoe UI",system-ui,sans-serif}
 main{max-width:640px;margin:0 auto;padding:12px 12px 100px}
 h1{font-size:22px;margin:6px 0 10px}h3{margin:14px 0 4px;font-size:17px}
-nav{display:flex;gap:6px;margin-bottom:10px}
+nav{display:flex;gap:6px;margin:0 -12px 10px;padding:8px 12px;position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);box-shadow:0 6px 8px -8px rgba(0,0,0,.35)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal>div{min-height:54px;padding:4px;border-radius:8px;font-size:12px;text-align:center}
+.cal .d{background:var(--card);border:1px solid var(--line);cursor:pointer}.cal .h{color:var(--mute);min-height:0;font-weight:600}.cal .has{border-color:var(--grn)}.cal .has b{color:var(--grn)}.cal .td{border:2px solid var(--ink)}.cal .sel{outline:3px solid var(--blue)}.cal .n{color:var(--mute)}
 nav button{flex:1;padding:10px 4px;font-size:15px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;font:inherit;font-weight:600}
 nav button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
@@ -70,7 +72,8 @@ const fmt=s=>new Date(s+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short'
 const gbp=n=>'£'+(Number(n)||0).toFixed(2).replace(/\.00$/,'');
 const wdiff=(a,b)=>Math.round((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/6048e5);
 const CUR=()=>wk(today());let W=CUR();
-const dueWk=c=>c.nextWk?c.nextWk:c.last?(c.freq?addDays(wk(c.last),c.freq*7):null):CUR();
+const rpt=c=>c.adhoc?'ad-hoc':c.freq?'every '+c.freq+'wk':'one-off';
+const dueWk=c=>c.nextWk?c.nextWk:c.adhoc?null:c.last?(c.freq?addDays(wk(c.last),c.freq*7):null):CUR();
 const vOwed=v=>v.paid?0:Math.max(0,v.amount-(v.part||0));
 const cOwed=c=>(c.visits||[]).reduce((s,v)=>s+vOwed(v),0);
 function act(msg,fn){snap=JSON.stringify(S);fn();save();render();$('umsg').textContent=msg;$('undo').style.display='block';clearTimeout(ut);ut=setTimeout(()=>$('undo').style.display='none',8000)}
@@ -79,7 +82,7 @@ function undo(){if(snap){S=JSON.parse(snap);snap=null;save();render()}$('undo').
 function render(){
   $('fab').textContent=tab==='quotes'?'+ Quote':'+ Customer';
   $('nav').innerHTML=[['week','This week'],['all','Customers'],['quotes','Quotes'],['money','Money']].map(([k,l])=>`<button class="${tab==k?'on':''}" onclick="tab='${k}';q='';SEL.clear();render()">${l}</button>`).join('');
-  $('filters').innerHTML=tab==='week'||(tab==='money'&&mtab!=='pay')?'':`<input placeholder="${tab=='money'?'Search name or bank reference':'Search name, street, notes'}" value="${esc(q)}" oninput="q=this.value;paint()">`;
+  $('filters').innerHTML=tab==='week'||(tab==='money'&&mtab!=='pay')?'':`<input placeholder="${tab=='money'?'Search address, name or bank reference':'Search name, street, notes'}" value="${esc(q)}" oninput="q=this.value;paint()">`;
   paint();
 }
 function paint(){tab==='week'?weekView():tab==='all'?allView():tab==='quotes'?quotesView():moneyView();selBar()}
@@ -87,11 +90,11 @@ const match=c=>{const t=q.toLowerCase();return !t||[c.name,c.address,c.notes,c.s
 
 function jobCard(c,plan){
   const d=dueWk(c),late=d?wdiff(CUR(),d):0,o=cOwed(c),pd=plan[c.id];
-  return `<div class="card"><div class="row" style="align-items:start"><input type="checkbox" style="flex:none;width:24px;height:24px;margin-top:2px" ${SEL.has(c.id)?'checked':''} onchange="tog('${c.id}')"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.area?' · '+esc(c.area):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${c.freq?'every '+c.freq+'wk':'one-off'}</div></div></div>
+  return `<div class="card"><div class="row" style="align-items:start"><input type="checkbox" style="flex:none;width:24px;height:24px;margin-top:2px" ${SEL.has(c.id)?'checked':''} onchange="tog('${c.id}')"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.area?' · '+esc(c.area):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${rpt(c)}</div></div></div>
   <div style="margin-top:4px">${!c.last&&!c.nextWk?'<span class="sub">First clean</span>':late>0?`<span class="over">${late} wk overdue</span>`:'<span class="sub">Due this week</span>'}${o?` <span class="over">· owes ${gbp(o)}</span>`:''}</div>
   ${c.contact||c.access?`<div class="sub" style="margin-top:4px">${c.contact?'Prefers '+esc(c.contact):''}${c.contact&&c.access?' · ':''}${c.access?'Access: '+esc(c.access):''}</div>`:''}${c.extraNote||c.extraPrice?`<div style="margin-top:4px"><b>Extra:</b> ${esc(c.extraNote)}${c.extraPrice?' '+gbp(c.extraPrice):''}</div>`:''}${c.notes?`<div class="sub" style="margin-top:4px">${esc(c.notes)}</div>`:''}
   <div class="days">${DN.map((n,i)=>`<button class="${pd===i?'on':''}" onclick="assign('${c.id}',${i})">${n[0]}</button>`).join('')}</div>
-  <div class="acts"><button class="btn pri" onclick="done('${c.id}')">Done ✓</button><button class="btn" onclick="moveDlg('${c.id}')">Move</button><button class="btn" onclick="extraDlg('${c.id}')">Extras</button><button class="btn" onclick="edit('${c.id}')">Edit</button>${c.phone?`<a class="btn" href="tel:${esc(c.phone)}" style="text-decoration:none;color:inherit">Call</a>`:''}</div></div>`;
+  <div class="acts"><button class="btn pri" onclick="done('${c.id}')">Done ✓</button><button class="btn" onclick="moveDlg('${c.id}')">Move</button><button class="btn" onclick="extraDlg('${c.id}')">Extras${c.xl&&c.xl.length?' ('+c.xl.length+')':''}</button><button class="btn" onclick="edit('${c.id}')">Edit</button>${c.phone?`<a class="btn" href="tel:${esc(c.phone)}" style="text-decoration:none;color:inherit">Call</a>`:''}</div></div>`;
 }
 function weekView(){
   const jobs=S.customers.filter(c=>{const d=dueWk(c);return d&&(W==CUR()?d<=W:d===W)});
@@ -114,17 +117,18 @@ function suggest(){act('Days suggested',()=>{
   const load=[0,0,0,0,0];
   Object.values(grp).sort((a,b)=>b.length-a.length).forEach(l=>{const d=load.indexOf(Math.min(...load));l.forEach(c=>p[c.id]=d);load[d]+=l.length});
 })}
-function done(id){const c0=S.customers.find(x=>x.id===id);act(c0.freq?'Done. Rebooked for week of '+fmt(addDays(CUR(),c0.freq*7)):'Done (one-off, not rebooked)',()=>{const c=S.customers.find(x=>x.id===id);(c.visits=c.visits||[]).push({date:today(),amount:(+c.price||0)+(+c.extraPrice||0),paid:c.pay==='cash',note:c.extraNote||'',pl:c.last||null,pn:c.nextWk||null});c.last=today();c.nextWk=null;c.extraNote='';c.extraPrice=0})}
+function done(id){const c0=S.customers.find(x=>x.id===id);act(c0.adhoc?'Done (ad-hoc, book again when they ask)':c0.freq?'Done. Rebooked for week of '+fmt(addDays(CUR(),c0.freq*7)):'Done (one-off, not rebooked)',()=>{const c=S.customers.find(x=>x.id===id);(c.visits=c.visits||[]).push({date:today(),amount:(+c.price||0)+(+c.extraPrice||0),paid:c.pay==='cash',note:c.extraNote||'',pl:c.last||null,pn:c.nextWk||null});c.last=today();c.nextWk=null;c.extraNote='';c.extraPrice=0;c.xl=[]})}
 function unDone(id,i){act('Undone',()=>{const c=S.customers.find(x=>x.id===id);const v=c.visits.splice(i,1)[0];if('pl' in v&&!c.visits.some(x=>x.date>v.date)){c.last=v.pl;c.nextWk=v.pn}else c.last=c.visits.length?c.visits.map(v=>v.date).sort().pop():null})}
 
 let gb='area';
-function custCard(c){const d=dueWk(c),o=cOwed(c);return `<div class="card" onclick="edit('${c.id}')"><div class="row"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.phone?' · '+esc(c.phone):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${c.freq?'every '+c.freq+'wk':'one-off'}</div></div></div><div class="sub" style="margin-top:4px">${d?'Next: week of '+fmt(d):'No repeat'}${o?` · <span class="over">owes ${gbp(o)}</span>`:''}</div>${gb==='gaps'?`<div class="over" style="margin-top:4px">Missing: ${miss(c).join(', ')}</div>`:''}</div>`}
+function custCard(c){const d=dueWk(c),o=cOwed(c);return `<div class="card" onclick="edit('${c.id}')"><div class="row"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${esc(c.address)}${c.phone?' · '+esc(c.phone):''}</div></div><div style="flex:1;text-align:right"><b>${gbp(c.price)}</b><div class="sub">${rpt(c)}</div></div></div><div class="sub" style="margin-top:4px">${d?(c.adhoc?'Booked: week of ':'Next: week of ')+fmt(d):c.adhoc?'Not booked <button class="btn" style="padding:4px 10px;margin-left:6px" onclick="event.stopPropagation();moveDlg(\''+c.id+'\')">Book in</button>':'No repeat'}${o?` · <span class="over">owes ${gbp(o)}</span>`:''}</div>${gb==='gaps'?`<div class="over" style="margin-top:4px">Missing: ${miss(c).join(', ')}</div>`:''}</div>`}
 function allView(){
   const l=S.customers.filter(match).sort((a,b)=>a.name.localeCompare(b.name));
-  const top=`<div class="row" style="align-items:center;margin-bottom:6px"><select onchange="gb=this.value;allView()"><option value="area" ${gb=='area'?'selected':''}>Group by area</option><option value="az" ${gb=='az'?'selected':''}>A to Z</option><option value="gaps" ${gb=='gaps'?'selected':''}>Needs details (${S.customers.filter(c=>miss(c).length).length})</option></select><button class="btn" style="flex:none" onclick="impDlg()">Import</button><button class="btn" style="flex:none" onclick="exportDlg('list')">Export</button></div><div class="sub">${l.length} customer${l.length==1?'':'s'}</div>`;
+  const top=`<div class="row" style="align-items:center;margin-bottom:6px"><select onchange="gb=this.value;allView()"><option value="area" ${gb=='area'?'selected':''}>Group by area</option><option value="az" ${gb=='az'?'selected':''}>A to Z</option><option value="adhoc" ${gb=='adhoc'?'selected':''}>Ad-hoc clients (${S.customers.filter(c=>c.adhoc).length})</option><option value="gaps" ${gb=='gaps'?'selected':''}>Needs details (${S.customers.filter(c=>miss(c).length).length})</option></select><button class="btn" style="flex:none" onclick="impDlg()">Import</button><button class="btn" style="flex:none" onclick="exportDlg('list')">Export</button></div><div class="sub">${l.length} customer${l.length==1?'':'s'}</div>`;
   let h;
   if(gb==='area'){const g={};l.forEach(c=>{const k=c.area||'No area';(g[k]=g[k]||[]).push(c)});
     h=Object.keys(g).sort((a,b)=>a==='No area'?1:b==='No area'?-1:a.localeCompare(b)).map(k=>`<div class="gh"><span>${esc(k)}</span><span class="sub">${g[k].length} · ${gbp(g[k].reduce((s,c)=>s+(+c.price||0),0))}</span></div>`+g[k].map(custCard).join('')).join('')}
+  else if(gb==='adhoc')h=l.filter(c=>c.adhoc).map(custCard).join('');
   else if(gb==='gaps')h=l.filter(c=>miss(c).length).map(c=>custCard(c)).join('');
   else h=l.map(custCard).join('');
   $('view').innerHTML=top+(h||'<div class="empty">No customers found.</div>');
@@ -136,7 +140,7 @@ function payView(){
   function oldest(c){return c.visits.filter(v=>vOwed(v)>0).map(v=>v.date).sort()[0]}
   $('view').innerHTML=`<div class="row"><div class="card"><div class="sub">Still owed</div><div class="big ${owed?'over':''}">${gbp(owed)}</div></div><div class="card"><div class="sub">Earned this month</div><div class="big">${gbp(earned)}</div></div></div>
   <h3>Waiting to pay</h3><div class="sub">Search a name or bank reference, then tap Paid.</div>`+
-  (l.map(c=>`<div class="card"><div class="row" style="align-items:center"><div style="flex:3"><h4>${esc(c.name)}</h4><div class="sub">${c.visits.filter(v=>vOwed(v)>0).length} unpaid · since ${fmt(oldest(c))}${c.ref?' · ref '+esc(c.ref):''}</div></div><div class="over" style="flex:1;text-align:right;font-size:18px">${gbp(cOwed(c))}</div></div><div class="acts"><button class="btn pri" onclick="pay('${c.id}')">Paid in full</button><button class="btn" onclick="pay('${c.id}',true)">Part payment</button><button class="btn" onclick="invoice('${c.id}')">Invoice</button></div></div>`).join('')||`<div class="empty">${q?'No match.':'Nobody owes you anything.'}</div>`)+
+  (l.map(c=>`<div class="card"><div class="row" style="align-items:center"><div style="flex:3"><h4>${esc(c.address||c.name)}</h4><div class="sub">${c.address&&c.name&&c.name!==c.address?esc(c.name)+' · ':''}${c.visits.filter(v=>vOwed(v)>0).length} unpaid · since ${fmt(oldest(c))}${c.ref?' · ref '+esc(c.ref):''}</div></div><div class="over" style="flex:1;text-align:right;font-size:18px">${gbp(cOwed(c))}</div></div><div class="acts"><button class="btn pri" onclick="pay('${c.id}')">Paid in full</button><button class="btn" onclick="pay('${c.id}',true)">Part payment</button><button class="btn" onclick="invoice('${c.id}')">Invoice</button></div></div>`).join('')||`<div class="empty">${q?'No match.':'Nobody owes you anything.'}</div>`)+
   `<div class="acts" style="margin-top:20px"><button class="btn" onclick="settings()">Settings</button><button class="btn" onclick="exp()">Back up data</button><button class="btn" onclick="imp()">Restore backup</button></div>`;
 }
 function pay(id,part){
@@ -154,16 +158,16 @@ function edit(id){
   ${f('email','Email (for invoices)','email')}${navigator.contacts&&navigator.contacts.select?'<div class="acts"><button class="btn" onclick="pickContact()">Fill phone and email from my contacts</button></div>':''}
   <label>Best way to contact</label><select id="f_contact">${['','phone call','text message','email'].map(o=>`<option value="${o}" ${o===(c.contact||'')?'selected':''}>${o||'No preference'}</option>`).join('')}</select>
   ${f('services','Services (comma separated, type anything)')}${f('access','Gate code / access')}${f('extras','Other prices (e.g. gutters £30, conservatory roof £40)')}
-  <div class="row"><div>${f('price','Price per visit (£)','number','step="0.5"')}</div><div><label>Repeat every</label><select id="f_freq">${fr.map(n=>`<option value="${n}" ${n==(c.freq||0)?'selected':''}>${n?n+' weeks':'One-off'}</option>`).join('')}</select></div></div>
+  <div class="row"><div>${f('price','Price per visit (£)','number','step="0.5"')}</div><div><label>Repeat every</label><select id="f_freq"><option value="adhoc" ${c.adhoc?'selected':''}>Ad-hoc (not on the rota)</option>${fr.map(n=>`<option value="${n}" ${!c.adhoc&&n==(c.freq||0)?'selected':''}>${n?n+' weeks':'One-off'}</option>`).join('')}</select></div></div>
   <div class="row"><div><label>Pays by</label><select id="f_pay"><option value="bank" ${c.pay!=='cash'?'selected':''}>Bank (unpaid until I tick it)</option><option value="cash" ${c.pay==='cash'?'selected':''}>Cash on the day (paid when done)</option></select></div><div>${f('ref','Name on bank statement')}</div></div>
   <div class="row"><div>${f('last','Last cleaned','date')}</div><div>${f('nextWk','Move next clean to (optional)','date')}</div></div>
   <label>Notes (gate codes, dogs, access)</label><textarea id="f_notes" rows="3">${esc(c.notes)}</textarea>
-  ${id?histHtml(c):''}<div class="acts"><button class="btn pri" onclick="saveC('${id||''}')">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button>${id?`<button class="btn" style="margin-left:auto;color:var(--red)" onclick="delC('${id}')">Delete</button>`:''}</div>`;
+  ${id?`<div class="acts"><button class="btn" onclick="if(applyC('${id}')){save();moveDlg('${id}')}">${c.adhoc?'Book a clean':'Book / move next clean'}</button><button class="btn" onclick="if(applyC('${id}')){save();extraDlg('${id}')}">Extras for next clean</button></div>`:''}${id?histHtml(c):''}<div class="acts"><button class="btn pri" onclick="saveC('${id||''}')">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button>${id?`<button class="btn" style="margin-left:auto;color:var(--red)" onclick="delC('${id}')">Delete</button>`:''}</div>`;
   $('dlg').showModal();
 }
 function applyC(id){const g=k=>$('f_'+k).value.trim();if(!g('name')){alert('Add a name first');return null}
   let c=S.customers.find(x=>x.id===id);if(!c){c={id:'c'+Date.now(),visits:[]};S.customers.push(c)}
-  Object.assign(c,{name:g('name'),address:g('address'),area:g('area'),phone:g('phone'),email:g('email'),contact:g('contact'),services:g('services'),access:g('access'),extras:g('extras'),price:parseFloat(g('price'))||0,freq:parseInt(g('freq'))||0,pay:g('pay'),ref:g('ref'),last:g('last')||null,nextWk:g('nextWk')?wk(g('nextWk')):null,notes:g('notes')});return c}
+  Object.assign(c,{name:g('name'),address:g('address'),area:g('area'),phone:g('phone'),email:g('email'),contact:g('contact'),services:g('services'),access:g('access'),extras:g('extras'),price:parseFloat(g('price'))||0,freq:parseInt(g('freq'))||0,adhoc:g('freq')==='adhoc',pay:g('pay'),ref:g('ref'),last:g('last')||null,nextWk:g('nextWk')?wk(g('nextWk')):null,notes:g('notes')});return c}
 function saveC(id){if(applyC(id)){save();$('dlg').close();render()}}
 function delC(id){if(confirm('Delete this customer and their job history?')){S.customers=S.customers.filter(c=>c.id!==id);save();$('dlg').close();render()}}
 function exp(){$('dform').innerHTML=`<h3 style="margin:0">Back up</h3><p class="sub">Copy this text and keep it somewhere safe (notes app, email to yourself).</p><textarea id="bk" rows="10" readonly>${esc(JSON.stringify(S))}</textarea><div class="acts"><button class="btn pri" onclick="dl('my-round-backup-'+today()+'.json',$('bk').value)">Download file</button><button class="btn" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div>`;$('dlg').showModal()}
@@ -251,16 +255,29 @@ function addV(id,unpaid){const c=applyC(id);if(!c)return;const d=$('h_d').value;
   c.visits.push({date:d,amount:parseFloat($('h_a').value)||+c.price||0,paid:!unpaid});c.last=lastOf(c);save();edit(id)}
 function delV(id,i){const c=applyC(id);if(!c||!confirm('Remove this clean from the history?'))return;c.visits.splice(i,1);c.last=lastOf(c);save();edit(id)}
 function moveDlg(id){const c=S.customers.find(x=>x.id===id),d=dueWk(c);
-  $('dform').innerHTML=`<h3 style="margin:0">Move ${esc(c.name)}</h3><div class="sub">Currently due: week of ${fmt(d||CUR())}</div>
-  <div class="acts"><button class="btn pri" onclick="moveTo('${id}',addDays(W,7))">Next week</button><button class="btn" onclick="moveTo('${id}',addDays(W,14))">In 2 weeks</button><button class="btn" onclick="moveTo('${id}',addDays(W,28))">In 4 weeks</button></div>
+  $('dform').innerHTML=`<h3 style="margin:0">${c.adhoc?'Book':'Move'} ${esc(c.name)}</h3><div class="sub">${d?'Currently due: week of '+fmt(d):'Not booked in yet'}</div>
+  <div class="acts">${d!==CUR()?`<button class="btn" onclick="moveTo('${id}',CUR())">This week</button>`:''}<button class="btn pri" onclick="moveTo('${id}',addDays(CUR(),7))">Next week</button><button class="btn" onclick="moveTo('${id}',addDays(CUR(),14))">In 2 weeks</button><button class="btn" onclick="moveTo('${id}',addDays(CUR(),28))">In 4 weeks</button></div>
   <label>Or pick a date</label><div class="row"><input id="mv_d" type="date"><button class="btn" style="flex:none" onclick="if($('mv_d').value)moveTo('${id}',$('mv_d').value)">Move</button></div>
-  <div class="acts"><button class="btn" onclick="$('dlg').close()">Cancel</button>${c.nextWk?`<button class="btn" onclick="moveTo('${id}',null)">Back to normal schedule</button>`:''}</div>`;$('dlg').showModal()}
-function moveTo(id,d){$('dlg').close();act('Job moved',()=>{const c=S.customers.find(x=>x.id===id);c.nextWk=d?wk(d):null;Object.values(S.plan).forEach(p=>delete p[id])})}
-function extraDlg(id){const c=S.customers.find(x=>x.id===id);
-  $('dform').innerHTML=`<h3 style="margin:0">Extra work for ${esc(c.name)}</h3><div class="sub">Shows on this clean only. The price is added when you tick Done, then it clears.</div>${c.extras?`<div class="sub">Their other prices: ${esc(c.extras)}</div>`:''}
-  <label>What extra work</label><input id="x_n" value="${esc(c.extraNote)}" placeholder="e.g. gutters, conservatory roof"><label>Extra price (£)</label><input id="x_p" type="number" step="0.5" value="${esc(c.extraPrice||'')}">
-  <div class="acts"><button class="btn pri" onclick="saveX('${id}')">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`;$('dlg').showModal()}
-function saveX(id){const c=S.customers.find(x=>x.id===id);c.extraNote=$('x_n').value.trim();c.extraPrice=parseFloat($('x_p').value)||0;save();$('dlg').close();render()}
+  <div class="acts"><button class="btn" onclick="$('dlg').close()">Cancel</button>${c.nextWk?`<button class="btn" onclick="moveTo('${id}',null)">${c.adhoc?'Cancel booking':'Back to normal schedule'}</button>`:''}</div>`;$('dlg').showModal()}
+const c0b=id=>(S.customers.find(x=>x.id===id)||{}).adhoc;
+function moveTo(id,d){$('dlg').close();act(c0b(id)?'Booked in':'Job moved',()=>{const c=S.customers.find(x=>x.id===id);c.nextWk=d?wk(d):null;Object.values(S.plan).forEach(p=>delete p[id])})}
+const XDEF=['Gutter clean','Inside windows','Conservatory roof','Fascias & soffits','Frames & sills','Solar panels'];
+const xParse=s=>String(s||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean).map(x=>{const m=x.match(/^(.*?)[\s:\-]*£?\s*(\d+(?:\.\d+)?)\s*$/);return m&&m[1]?{d:m[1].trim(),p:m[2]}:{d:x.replace(/£/g,'').trim(),p:''}});
+let XL=[],XC=[],XID='';
+function extraDlg(id){const c=S.customers.find(x=>x.id===id);XID=id;XL=(c.xl&&c.xl.length?c.xl:c.extraNote||c.extraPrice?[{d:c.extraNote||'',p:c.extraPrice||''}]:[]).map(x=>({...x}));drawX();if(!$('dlg').open)$('dlg').showModal()}
+function readX(){if($('xd0')||!XL.length)XL=XL.map((l,i)=>({d:$('xd'+i).value.trim(),p:$('xp'+i).value}))}
+function addX(i){readX();XL.push(i==null?{d:'',p:''}:{...XC[i]});drawX()}
+function delX(i){readX();XL.splice(i,1);drawX()}
+function xTot(){readX();$('x_tot').textContent=gbp(XL.reduce((s,x)=>s+(parseFloat(x.p)||0),0))}
+function drawX(){const c=S.customers.find(x=>x.id===XID),own=xParse(c.extras),on=own.map(o=>o.d.toLowerCase());XC=[...own,...XDEF.filter(n=>!on.includes(n.toLowerCase())).map(d=>({d,p:''}))];
+  $('dform').innerHTML=`<h3 style="margin:0">Extras for ${esc(c.name)}</h3><div class="sub">For the next clean only. Tap to add. The prices are added to the bill when you tick Done, then they clear.</div>
+  <div style="margin:8px 0">${XC.map((x,i)=>`<button class="btn" style="padding:6px 10px;margin:0 6px 6px 0" onclick="addX(${i})">+ ${esc(x.d)}${x.p?' '+gbp(x.p):''}</button>`).join('')}</div>
+  ${XL.map((l,i)=>`<div class="row" style="margin-bottom:6px"><input style="flex:3" id="xd${i}" value="${esc(l.d)}" placeholder="What extra work"><input style="flex:1" id="xp${i}" type="number" step="0.5" value="${esc(l.p)}" placeholder="£" oninput="xTot()"><button class="btn" style="flex:none" onclick="delX(${i})">✕</button></div>`).join('')||'<div class="sub">No extras for the next clean.</div>'}
+  <div class="acts"><button class="btn" onclick="addX()">+ Something else</button><b style="margin-left:auto">Extras total <span id="x_tot">${gbp(XL.reduce((s,x)=>s+(parseFloat(x.p)||0),0))}</span></b></div>
+  <div class="acts"><button class="btn pri" onclick="saveX()">Save</button><button class="btn" onclick="$('dlg').close()">Cancel</button></div>`}
+function saveX(){readX();const c=S.customers.find(x=>x.id===XID),l=XL.filter(x=>x.d||parseFloat(x.p)),on=xParse(c.extras).map(o=>o.d.toLowerCase());
+  l.filter(x=>x.d&&parseFloat(x.p)&&!on.includes(x.d.toLowerCase())).forEach(x=>c.extras=(c.extras?c.extras+', ':'')+x.d+' £'+x.p);
+  c.xl=l;c.extraNote=l.map(x=>x.d).filter(Boolean).join(', ');c.extraPrice=l.reduce((s,x)=>s+(parseFloat(x.p)||0),0);save();$('dlg').close();render()}
 let mtab='pay';
 const CATS=['Fuel','Vehicle costs','Equipment & supplies','Insurance','Phone & software','Advertising','Wages / help','Bank & accountancy','Other'];
 const rec=v=>v.pays?v.pays:v.paid?[{d:v.date,a:v.amount}]:v.part?[{d:v.date,a:v.part}]:[];
@@ -268,9 +285,23 @@ const tyOf=d=>{const y=+d.slice(0,4);return d>=y+'-04-06'?y:y-1};
 const inTY=(d,y)=>d>=y+'-04-06'&&d<=(y+1)+'-04-05';
 const tyLab=y=>y+'/'+String(y+1).slice(2);
 let TY=tyOf(today());
+let CM=today().slice(0,7),CD=today();
+function calView(){
+  const vs=S.customers.flatMap(c=>(c.visits||[]).map(v=>({c,v}))),inM=x=>x.startsWith(CM),day={},rin={};
+  vs.forEach(x=>{if(inM(x.v.date))day[x.v.date]=(day[x.v.date]||0)+x.v.amount;rec(x.v).forEach(r=>{if(inM(r.d))rin[r.d]=(rin[r.d]||0)+r.a})});
+  const f=new Date(CM+'-01T12:00:00'),n=new Date(f.getFullYear(),f.getMonth()+1,0).getDate(),lead=(f.getDay()+6)%7,mt=Object.values(day).reduce((s,a)=>s+a,0),mi=Object.values(rin).reduce((s,a)=>s+a,0),jobs=vs.filter(x=>inM(x.v.date)).length;
+  const shift=k=>{const d=new Date(f);d.setMonth(d.getMonth()+k);return iso(d).slice(0,7)};
+  let g=['M','T','W','T','F','S','S'].map(x=>`<div class="h">${x}</div>`).join('')+'<div></div>'.repeat(lead);
+  for(let i=1;i<=n;i++){const d=CM+'-'+String(i).padStart(2,'0'),a=day[d]||0;g+=`<div class="d ${a?'has':''} ${d===today()?'td':''} ${d===CD?'sel':''}" onclick="CD='${d}';render()"><div class="n">${i}</div>${a?`<b>£${Math.round(a)}</b>`:''}</div>`}
+  const dj=vs.filter(x=>x.v.date===CD).sort((a,b)=>(a.c.address||a.c.name).localeCompare(b.c.address||b.c.name)),dt=dj.reduce((s,x)=>s+x.v.amount,0);
+  $('view').innerHTML=`<div class="row" style="align-items:center"><button class="btn" style="flex:none" onclick="CM='${shift(-1)}';render()">‹</button><b style="text-align:center">${f.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</b><button class="btn" style="flex:none" onclick="CM='${shift(1)}';render()">›</button></div>
+  <div class="row"><div class="card"><div class="sub">Work done</div><div class="big">${gbp(mt)}</div><div class="sub">${jobs} job${jobs==1?'':'s'}</div></div><div class="card"><div class="sub">Money in</div><div class="big ok">${gbp(mi)}</div><div class="sub">payments received</div></div></div>
+  <div class="cal">${g}</div>
+  ${CD.startsWith(CM)?`<h3>${fmt(CD)}</h3><div class="card"><b>${gbp(dt)}</b> work done · ${dj.length} job${dj.length==1?'':'s'}${rin[CD]?` · <span class="ok">${gbp(rin[CD])} money in</span>`:''}</div>`+(dj.map(x=>`<div class="card row" style="align-items:center"><div style="flex:3"><b>${esc(x.c.address||x.c.name)}</b><div class="sub">${x.c.address&&x.c.name!==x.c.address?esc(x.c.name)+' · ':''}${x.v.paid?'<span class="ok">paid</span>':'<span class="over">unpaid</span>'}${x.v.note?' · '+esc(x.v.note):''}</div></div><b style="flex:none">${gbp(x.v.amount)}</b></div>`).join('')||'<div class="empty">No jobs logged on this day.</div>'):'<div class="sub" style="margin-top:8px">Tap a day to see the jobs.</div>'}
+  <div class="sub" style="margin-top:8px">Each day shows the work done that day. Money in counts payments on the day you marked them paid.</div>`}
 function moneyView(){
-  const sub=`<div class="days" style="margin:0 0 8px">${[['pay','Payments'],['out','Outgoings'],['tax','Tax year']].map(([k,l])=>`<button class="${mtab==k?'on':''}" onclick="mtab='${k}';render()">${l}</button>`).join('')}</div>`;
-  mtab==='pay'?payView():mtab==='out'?outView():taxView();$('view').innerHTML=sub+$('view').innerHTML}
+  const sub=`<div class="days" style="margin:0 0 8px">${[['pay','Payments'],['cal','Calendar'],['out','Outgoings'],['tax','Tax year']].map(([k,l])=>`<button class="${mtab==k?'on':''}" onclick="mtab='${k}';render()">${l}</button>`).join('')}</div>`;
+  mtab==='pay'?payView():mtab==='cal'?calView():mtab==='out'?outView():taxView();$('view').innerHTML=sub+$('view').innerHTML}
 function outView(){
   const ex=(S.exp||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
   $('view').innerHTML=`<div class="card"><b>Add an outgoing</b>
@@ -323,7 +354,7 @@ function exportDlg(mode){
   else if(mode==='hist'){L.push('Date\tCustomer\tAddress\tArea\tWork\tAmount\tPaid\tNote');
     S.customers.flatMap(x=>(x.visits||[]).map(v=>({x,v}))).sort((a,b)=>a.v.date.localeCompare(b.v.date)).forEach(({x,v})=>L.push([v.date,c(x.name),c(x.address),c(x.area),c(x.services),v.amount.toFixed(2),v.paid?'Yes':vOwed(v)<v.amount?'Part':'No',c(v.note)].join('\t')));note='Every clean you have logged. Paste into Excel or Google Sheets.'}
   else{L.push('Name\tAddress\tArea\tPhone\tEmail\tBest contact\tServices\tAccess\tOther prices\tPrice\tRepeat (weeks)\tPays by\tBank name\tLast cleaned\tNext due (week of)\tOwes\tNotes');
-    S.customers.slice().sort((a,b)=>(a.area||'~').localeCompare(b.area||'~')||a.name.localeCompare(b.name)).forEach(x=>L.push([x.name,x.address,x.area,x.phone,x.email,x.contact,x.services,x.access,x.extras,(+x.price||0).toFixed(2),x.freq||0,x.pay,x.ref,x.last||'',dueWk(x)||'',cOwed(x).toFixed(2),x.notes].map(c).join('\t')));note='Your customer list, grouped by area. Paste into Excel or Google Sheets.'}
+    S.customers.slice().sort((a,b)=>(a.area||'~').localeCompare(b.area||'~')||a.name.localeCompare(b.name)).forEach(x=>L.push([x.name,x.address,x.area,x.phone,x.email,x.contact,x.services,x.access,x.extras,(+x.price||0).toFixed(2),x.adhoc?'ad-hoc':x.freq||0,x.pay,x.ref,x.last||'',dueWk(x)||'',cOwed(x).toFixed(2),x.notes].map(c).join('\t')));note='Your customer list, grouped by area. Paste into Excel or Google Sheets.'}
   const tab=(m,l)=>`<button class="${mode===m?'on':''}" onclick="exportDlg('${m}')">${l}</button>`;
   $('dform').innerHTML=`<h3 style="margin:0">Export</h3><div class="days" style="margin:8px 0">${tab('list','Customers')}${tab('hist','Cleans')}${tab('full','Full backup')}</div><p class="sub">${note}</p><textarea id="bk" rows="10" readonly>${esc(L.join('\n'))}</textarea><div class="acts"><button class="btn pri" onclick="dl('my-round-${mode==='full'?'backup':mode==='hist'?'cleans':'customers'}-'+today()+'.${mode==='full'?'json':'csv'}',$('bk').value,${mode!=='full'})">Download file</button><button class="btn" onclick="$('bk').select();document.execCommand('copy')">Copy</button><button class="btn" onclick="$('dlg').close()">Close</button></div><div class="sub" style="margin-top:8px">Earnings and outgoings for the tax year are under Money, then Tax year.</div>`;
   if(!$('dlg').open)$('dlg').showModal()}
@@ -377,10 +408,10 @@ function saveFb(){const o={};[...($('s_fb').value).matchAll(/(\w+)\s*:\s*["']([^
   if(!o.apiKey||!o.projectId){alert('That does not look like the Firebase config. Copy the whole block again.');return}
   try{localStorage.setItem('psw-fb',JSON.stringify(o))}catch(e){}location.reload()}
 function cloudHtml(){return `<h3 style="margin:14px 0 4px">Cloud sync</h3><div class="sub">${esc(fbStat)}</div><div class="acts">${FB?(CUID?`<button class="btn" onclick="pushConfirm()">Upload this device now</button><button class="btn" onclick="signOutCloud();$('dlg').close()">Sign out</button>`:`<button class="btn pri" onclick="signInDlg()">Sign in</button>`):''}</div>${FB_CONFIG?'':`<label>Firebase config (paste the block Firebase gave you)</label><textarea id="s_fb" rows="4" placeholder="apiKey: ..., authDomain: ..., projectId: ..."></textarea><div class="acts"><button class="btn" onclick="saveFb()">Save cloud setup</button></div>`}`}
-const miss=c=>[!c.address&&'address',!c.area&&'area',!c.phone&&'phone',!c.email&&'email',!(+c.price)&&'price',!c.freq&&'repeat',!c.last&&!c.nextWk&&'last cleaned'].filter(Boolean);
+const miss=c=>[!c.address&&'address',!c.area&&'area',!c.phone&&'phone',!c.email&&'email',!(+c.price)&&'price',!c.freq&&!c.adhoc&&'repeat',!c.last&&!c.nextWk&&'last cleaned'].filter(Boolean);
 async function pickContact(){try{const r=await navigator.contacts.select(['name','tel','email'],{multiple:false});if(!r.length)return;const x=r[0];
   if(x.tel&&x.tel[0])$('f_phone').value=x.tel[0].replace(/\s+/g,' ');if(x.email&&x.email[0])$('f_email').value=x.email[0];if(x.name&&x.name[0]&&!$('f_name').value)$('f_name').value=x.name[0]}catch(e){}}
-const IMP=[['address','Address (identifies each customer)',/address|street|road|house|property/i],['name','Name (optional)',/name|customer|client/i],['email','Email',/e-?mail/i],['area','Area',/area|round|zone|patch|district|town|village/i],['phone','Phone',/phone|mobile|tel|number/i],['services','Services',/service|work|job|type/i],['price','Price',/price|cost|charge|£|amount|fee/i],['freq','Repeat (weeks)',/freq|every|week|rota|cycle|interval/i],['last','Last cleaned',/last|cleaned|done|previous|date/i],['pay','Pays by (cash/bank)',/pay|method/i],['ref','Name on bank statement',/ref|bank/i],['access','Gate code / access',/gate|access|code|key/i],['extras','Other prices',/extra|gutter|other/i],['notes','Notes',/note|info|comment|detail|remark/i]];
+const IMP=[['address','Address (identifies each customer)',/address|street|road|house|property/i],['name','Name (optional)',/name|customer|client/i],['email','Email',/e-?mail/i],['area','Area',/area|round|zone|patch|district|town|village/i],['phone','Phone',/phone|mobile|tel|number/i],['services','Services',/service|work|job|type/i],['price','Price',/price|cost|charge|£|amount|fee/i],['freq','Repeat (weeks)',/freq|every|week|rota|cycle|interval|repeat|often/i],['last','Last cleaned',/last|cleaned|done|previous|date/i],['pay','Pays by (cash/bank)',/pay|method/i],['ref','Name on bank statement',/ref|bank/i],['access','Gate code / access',/gate|access|code|key/i],['extras','Other prices',/extra|gutter|other/i],['notes','Notes',/note|info|comment|detail|remark/i]];
 let IM=null;
 function tsv(t){const sep=t.includes('\t')?'\t':',',R=[];let r=[],c='',q=false;
   for(let i=0;i<t.length;i++){const ch=t[i];
@@ -429,9 +460,10 @@ function impRun(dry){const m=IM.map,g=(r,k)=>m[k]>=0?String(r[m[k]]||'').trim():
     if(!c){c={id:'c'+Date.now()+'_'+n,name:nm||addr,address:addr,area:'',phone:'',email:'',services:'',price:0,freq:0,pay:'bank',ref:'',last:null,notes:'',visits:[]};list.push(c);add++}
     else{if(addr&&!c.address){c.address=addr;ch=true}if(nm&&(!c.name||c.name===c.address)){c.name=nm;ch=true}}
     Object.entries(vals).forEach(([k,v])=>{if(!c[k]){c[k]=v;ch=true}});
+    if(m.freq>=0&&/ad.?hoc|as req|when|call/i.test(g(r,'freq'))&&!c.adhoc&&!c.freq){c.adhoc=true;ch=true}
     if(lastP&&!(+c.price)){c.price=lastP.amt;ch=true}
     const up=[...new Set(pts)].sort((a,b)=>a-b);
-    if(!c.freq&&up.length>=2){const gp=up.slice(1).map((x,j)=>x-up[j]).sort((a,b)=>a-b),med=gp[Math.floor(gp.length/2)];c.freq=Math.min(52,med*4);guess++;ch=true}
+    if(!c.freq&&!c.adhoc&&up.length>=2){const gp=up.slice(1).map((x,j)=>x-up[j]).sort((a,b)=>a-b),med=gp[Math.floor(gp.length/2)];c.freq=Math.min(52,med*4);guess++;ch=true}
     if(nd&&!c.nextWk){c.nextWk=wk(nd);dates++;ch=true}
     else if(!nd&&lastP&&lastP.yr*12+lastP.mo<=curKey&&!c.last&&!c.nextWk){let d=lastP.yr+'-'+String(lastP.mo+1).padStart(2,'0')+'-15';if(d>t0)d=t0;c.last=d;ch=true}
     if(!ex&&sample.length<3)sample.push(c.name+(c.price?': '+gbp(c.price):'')+(c.freq?', every '+c.freq+' wk':'')+(nd?', due '+fmt(nd):''));
